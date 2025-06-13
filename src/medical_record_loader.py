@@ -22,31 +22,33 @@ class MedicalRecordLoader:
         OUTPUT: String
         """
 
+        if os.path.exists(self.selected_medical_report_file):
+            de = ""
+            text_table = pd.read_csv(self.selected_medical_report_file, sep=";")
 
-        de = ""
-        text_table = pd.read_csv(self.selected_medical_report_file, sep=";")
+            text_row = text_table[text_table['exam_ID'] == exam_ID]
 
-        text_row = text_table[text_table['exam_ID'] == exam_ID]
+            if not text_row.empty:
+                de = de + "**INDICATION**\n"
+                for exam in range(len(text_row)):
+                    de = de + "\t" + "Exam: " + str(exam + 1 ) + "\n"
+                    de = de + str(text_row.iloc[exam]['indication']) + "\n"
+                de = de + "\n**FINDING_LIVER**\n"
+                for exam in range(len(text_row)):
+                    de = de + "\t" + "Exam: " + str(exam + 1 ) + "\n"
+                    de = de + str(text_row.iloc[exam]['finding_liver']) + "\n"
+                de = de + "\n**EVALUATION**\n"
+                for exam in range(len(text_row)):
+                    de = de + "\t" + "Exam: " + str(exam + 1 ) + "\n"
+                    de = de + str(text_row.iloc[exam]['evaluation']) + "\n"
+                de = de + "\n**RECOMMENDATION**\n"
+                for exam in range(len(text_row)):
+                    de = de + "\t" + "Exam: " + str(exam + 1 ) + "\n"
+                    de = de + str(text_row.iloc[exam]['recommendation']) + "\n"      
 
-        if not text_row.empty:
-            de = de + "**INDICATION**\n"
-            for exam in range(len(text_row)):
-                de = de + "\t" + "Exam: " + str(exam + 1 ) + "\n"
-                de = de + str(text_row.iloc[exam]['indication']) + "\n"
-            de = de + "\n**FINDING_LIVER**\n"
-            for exam in range(len(text_row)):
-                de = de + "\t" + "Exam: " + str(exam + 1 ) + "\n"
-                de = de + str(text_row.iloc[exam]['finding_liver']) + "\n"
-            de = de + "\n**EVALUATION**\n"
-            for exam in range(len(text_row)):
-                de = de + "\t" + "Exam: " + str(exam + 1 ) + "\n"
-                de = de + str(text_row.iloc[exam]['evaluation']) + "\n"
-            de = de + "\n**RECOMMENDATION**\n"
-            for exam in range(len(text_row)):
-                de = de + "\t" + "Exam: " + str(exam + 1 ) + "\n"
-                de = de + str(text_row.iloc[exam]['recommendation']) + "\n"      
-
-        else: 
+            else: 
+                de = "No annotation available."
+        else:
             de = "No annotation available."
-
+        
         return de

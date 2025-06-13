@@ -180,7 +180,7 @@ class AnnotationLoader():
                 exam_id = parts[1].split("_")[-1] if len(parts) > 1 else "NN"
                 img_num = int(os.path.splitext(file)[0].split("_")[2])
                 img_id = os.path.splitext(file)[0]
-                file_type = ["frame" if "frame" in file else "img"]
+                file_type = "frame" if "frame" in file else "img"
 
                 entries.append({
                     "pat_ID": pat_id,
