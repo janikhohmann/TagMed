@@ -10,8 +10,7 @@ class MedicalRecordLoader:
     Class to handle loading and processing of medical records from CSV files.
     """
 
-    def __init__(self, csv_path):
-        self.csv_path = csv_path
+    def __init__(self):
 
         self.config = ConfigHandler()
         self.selected_medical_report_file = self.config.get("selected_medical_report_file", "")
@@ -28,7 +27,7 @@ class MedicalRecordLoader:
         text_table = pd.read_csv(self.selected_medical_report_file, sep=";")
 
         text_row = text_table[text_table['exam_ID'] == exam_ID]
-        
+
         if not text_row.empty:
             de = de + "**INDICATION**\n"
             for exam in range(len(text_row)):

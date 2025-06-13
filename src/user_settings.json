@@ -6,5 +6,8 @@
   "selected_image_folder": "/home/janik/Documents/SONO/test_sono_data/renamed_subset_raw",
   "selected_anno_table_file": "auto_generated_anno_table.csv",
   "selected_medical_report_file": "/home/janik/Documents/SONO/data_tables/DATABASE/ALL_EXAMS.csv",
-  "image_size": (600,600)
+  "image_size": [
+    600,
+    600
+  ]
 }

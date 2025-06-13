@@ -65,7 +65,9 @@ class AnnotationLoader():
         Reads annotation table and returns all annotations as panda dataframe.
         '''
         anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
-        annotated_images = anno_table[anno_table["x"].apply(lambda x: isinstance(x, str) and x.startswith("["))]
+        # load all possible annotations, even when they are empty
+        annotated_images = anno_table[anno_table["x"].apply(lambda x: isinstance(x, str))]
+
         return annotated_images
 
     def load_annotations_in_internal_list(self):
@@ -103,84 +105,15 @@ class AnnotationLoader():
         
     def save_annotations_to_anno_table(self):
         """
-        Synchronizes self.all_internal_annotation_data with the CSV table (list structure)
+        Synchronizes self.all_annotated_data with the CSV table (list structure)
         """
-
         try:
-            if not self.all_internal_annotation_data:
-                print("No annotations to save")
-                return
-
-            # Lade bestehende Tabelle
-            anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
-
-            # Konvertiere gespeicherte String-Listen in echte Listen
-            for col in ['x', 'y', 'w', 'h', 'class']:
-                anno_table[col] = anno_table[col].apply(
-                    lambda val: ast.literal_eval(val) if isinstance(val, str) and val.startswith('[') else []
-                )
-
-            # Mapping von img_ID auf Zeilenindex
-            table_map = {row['img_ID']: idx for idx, row in anno_table.iterrows()}
-
-            # Gruppiere Annotationen nach img_ID
-            df_annotations = pd.DataFrame(self.all_internal_annotation_data)
-            grouped = df_annotations.groupby('img_ID')
-
-            new_count = 0
-            updated_count = 0
-
-            processed_img_ids = set()
-
-            for img_id, group in grouped:
-                processed_img_ids.add(img_id)
-                ann_data = group.to_dict(orient='list')
-
-                if img_id in table_map:
-                    idx = table_map[img_id]
-                    for col in ['x', 'y', 'w', 'h', 'class']:
-                        values = ann_data.get(col, [])
-                        anno_table.at[idx, col] = values if values else ["NN"]
-                    updated_count += 1
-                else:
-                    # Bild nicht vorhanden → Neue Zeile
-                    pat_id = getattr(self.gui, 'patient_id', 'NN')
-                    exam_id = getattr(self.gui, 'selected_exam', 'NN')
-                    img_num = getattr(self.gui, 'image_number', 'NN')
-                    new_path = getattr(self.gui, 'image_path', 'NN')
-
-                    new_row = {
-                        'pat_ID': pat_id,
-                        'exam_ID': exam_id,
-                        'img_num': img_num,
-                        'img_ID': img_id,
-                        'exam_mode': 'NN',
-                        'organ': 'NN',
-                        'x': ann_data.get('x', ["NN"]),
-                        'y': ann_data.get('y', ["NN"]),
-                        'w': ann_data.get('w', ["NN"]),
-                        'h': ann_data.get('h', ["NN"]),
-                        'class': ann_data.get('class', ["NN"]),
-                        'file_type': 'img',
-                        'new_path': new_path
-                    }
-
-                    anno_table = pd.concat([anno_table, pd.DataFrame([new_row])], ignore_index=True)
-                    new_count += 1
-
-            # Optional: Für Bilder ohne Annotationen, aber die schon im Table existieren → auf "NN" setzen
-            for idx, row in anno_table.iterrows():
-                img_id = row['img_ID']
-                if img_id not in processed_img_ids:
-                    for col in ['x', 'y', 'w', 'h', 'class']:
-                        anno_table.at[idx, col] = ["NN"]
-
-            # Speichern
-            anno_table.to_csv(self.selected_anno_table_file, sep=";", index=False)
-            print(f"Saved {new_count} new annotations and updated {updated_count} existing annotations")
+            self.all_annotated_data.to_csv(self.selected_anno_table_file, sep=";", index=False)
+            annotations = self.all_annotated_data["x"] != "NN"
+            print(f"[DEBUG] Saved {len(annotations)} rows to {self.selected_anno_table_file}")
 
         except Exception as e:
-            print(f"Error saving annotations to table: {e}")
+             print(f"Error saving annotations to table: {e}")
 
 
     def filter_annotations_for_patient(self, all_annotated_data, patient_id):
@@ -247,6 +180,7 @@ class AnnotationLoader():
                 exam_id = parts[1].split("_")[-1] if len(parts) > 1 else "NN"
                 img_num = int(os.path.splitext(file)[0].split("_")[2])
                 img_id = os.path.splitext(file)[0]
+                file_type = ["frame" if "frame" in file else "img"]
 
                 entries.append({
                     "pat_ID": pat_id,
@@ -260,7 +194,7 @@ class AnnotationLoader():
                     "h": "NN",
                     "exam_mode": "NN",
                     "organ": "NN",
-                    "file_type": "img",
+                    "file_type": file_type,
                     "new_path": os.path.join(root, file)
                 })
 
