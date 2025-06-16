@@ -317,7 +317,7 @@ class ImgAnnotationHandler:
 
         if not self.gui.modify_mode.get():
             self.remove_resize_handles()
-            print("[Modify] Modify Mode is OFF – skipping.")
+            self.update_annotation_in_listbox()
             return
 
         selection = self.gui.img_annotation_listbox.curselection()
@@ -326,6 +326,7 @@ class ImgAnnotationHandler:
             return
 
         listbox_index = selection[0]
+        self.listbox_index = listbox_index 
         current_image_id = self.gui.selected_image_index.split(".")[0].strip()
 
         # Filter die richtige Zeile (ein Bild = eine Zeile in df)
@@ -337,13 +338,7 @@ class ImgAnnotationHandler:
         df_index = self.gui.all_annotations[match].index[0]
 
         row = self.gui.all_annotations.loc[df_index]
-
-        # for col in ['x', 'y', 'w', 'h', 'class']:
-        #     print(col, row[col])
-        # # Sicherstellen, dass alle Werte Listen sind
-        # if not all(isinstance(row[col], list) for col in ['x', 'y', 'w', 'h', 'class']):
-        #     print("[ERROR] Data row is not properly formatted as lists.")
-        #     return
+        self.row = row
         
         x_list = ast.literal_eval(row['x']) if isinstance(row['x'], str) and row['x'].startswith('[') else row['x'] if isinstance(row['x'], list) else []
         y_list = ast.literal_eval(row['y']) if isinstance(row['y'], str) and row['y'].startswith('[') else row['y'] if isinstance(row['y'], list) else []
@@ -531,27 +526,64 @@ class ImgAnnotationHandler:
             return
 
         # Neue Geometrie berechnen
-        x, y, w, h = self.calculate_rectangle()
+        new_x, new_y, new_w, new_h = self.calculate_rectangle()
+        
+        # Den Listenindex der Annotation
+        annotation_idx = self.listbox_index
+        
+        row = self.row
+        # Bestehende Listen aus dem DataFrame lesen und parsen
+        x_list = ast.literal_eval(row['x']) if isinstance(row['x'], str) and row['x'].startswith('[') else row['x'] if isinstance(row['x'], list) else []
+        y_list = ast.literal_eval(row['y']) if isinstance(row['y'], str) and row['y'].startswith('[') else row['y'] if isinstance(row['y'], list) else []
+        w_list = ast.literal_eval(row['w']) if isinstance(row['w'], str) and row['w'].startswith('[') else row['w'] if isinstance(row['w'], list) else []
+        h_list = ast.literal_eval(row['h']) if isinstance(row['h'], str) and row['h'].startswith('[') else row['h'] if isinstance(row['h'], list) else []
+        class_list = ast.literal_eval(row['class']) if isinstance(row['class'], str) and row['x'].startswith('[') else row['class'] if isinstance(row['class'], list) else []
 
-        # Direkt in der DataFrame-Zeile ändern
-        self.gui.all_annotations.at[self.selected_annotation_original_index, 'x'] = x
-        self.gui.all_annotations.at[self.selected_annotation_original_index, 'y'] = y
-        self.gui.all_annotations.at[self.selected_annotation_original_index, 'w'] = w
-        self.gui.all_annotations.at[self.selected_annotation_original_index, 'h'] = h
+        # print("DEBUG x list "), self.gui.all_annotations.at[self.selected_annotation_original_index, 'x']
 
-        print(f"[DEBUG] Updated DataFrame row {self.selected_annotation_original_index} → x:{x}, y:{y}, w:{w}, h:{h}")
+        # print(f"x_list (len {len(x_list)}): {x_list}")
+        # print(f"y_list (len {len(y_list)}): {y_list}")
+        # print(f"w_list (len {len(w_list)}): {w_list}")
+        # print(f"h_list (len {len(h_list)}): {h_list}")
+        # print(f"annotation_idx: {annotation_idx}")
 
-        # Optional: rect_id prüfen (Debug)
-        rect_id = self.gui.all_annotations.at[self.selected_annotation_original_index, 'rect_id']
-        if rect_id != self.rect_id:
-            print(f"[Warning] rect_id mismatch: DataFrame={rect_id}, Current={self.rect_id}")
+        # print(f"Listbox size: {self.gui.img_annotation_listbox.size()}")
+        # print(f"Listbox current selection index: {annotation_idx}")
 
-        # Listbox-Eintrag aktualisieren
+
+        # Prüfen, ob annotation_idx gültig ist
+        if annotation_idx >= len(x_list) or annotation_idx >= len(y_list) or annotation_idx >= len(w_list) or annotation_idx >= len(h_list):
+            print(f"[Update Error] annotation index {annotation_idx} out of range in DataFrame lists.")
+            return
+
+        # Listen an der Stelle annotation_idx aktualisieren
+        x_list[annotation_idx] = new_x
+        y_list[annotation_idx] = new_y
+        w_list[annotation_idx] = new_w
+        h_list[annotation_idx] = new_h
+
+        print("DEBUG x list ", x_list)
+
+        # Aktualisierte Listen zurück in DataFrame schreiben
+        self.gui.all_annotations.at[self.selected_annotation_original_index, 'x'] = x_list
+        self.gui.all_annotations.at[self.selected_annotation_original_index, 'y'] = y_list
+        self.gui.all_annotations.at[self.selected_annotation_original_index, 'w'] = w_list
+        self.gui.all_annotations.at[self.selected_annotation_original_index, 'h'] = h_list
+
+        # print("DEBUG x list "), self.gui.all_annotations.at[self.selected_annotation_original_index, 'x']
+
+        # print(f"[DEBUG] Updated annotation index {annotation_idx} in DataFrame row {self.selected_annotation_original_index} → x:{new_x}, y:{new_y}, w:{new_w}, h:{new_h}")
+
+        # Listbox-Eintrag aktualisieren (Klassen-Label hier einzeln aus der Liste holen)
+        if annotation_idx < len(class_list):
+            class_label = class_list[annotation_idx]
+        else:
+            class_label = "Unknown"
+
         selected_in_listbox = self.gui.img_annotation_listbox.curselection()
         if selected_in_listbox:
             listbox_index = selected_in_listbox[0]
-            class_label = self.gui.all_annotations.at[self.selected_annotation_original_index, 'class']
-            updated_text = f"{str(class_label).ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
+            updated_text = f"{str(class_label).ljust(12)} x:{str(new_x).ljust(5)} y:{str(new_y).ljust(5)} w:{str(new_w).ljust(5)} h:{str(new_h).ljust(5)}"
 
             self.gui.img_annotation_listbox.delete(listbox_index)
             self.gui.img_annotation_listbox.insert(listbox_index, updated_text)
