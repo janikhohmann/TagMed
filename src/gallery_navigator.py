@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import  ttk, messagebox
 import os 
 from PIL import Image, ImageTk
+import threading
 
 from config_handler import ConfigHandler
 from annotation_loader import AnnotationLoader
@@ -362,7 +363,7 @@ class GalleryNavigator:
             def on_saved():
                 self.patient_window.destroy()
             
-            self.annotation_loader.save_annotations_to_anno_table(on_complete=on_saved)
+            self.save_annotation_gui(on_complete=on_saved)
         elif answer is False:
             self.patient_window.destroy()
 
@@ -413,7 +414,7 @@ class GalleryNavigator:
         delete_button.pack(pady=2, fill=tk.X)
 
         save_button = tk.Button(controls_frame, text="Save", width=12,
-                               command=self.annotation_loader.save_annotations_to_anno_table,
+                               command=lambda: self.save_annotation_gui(on_complete=self.on_annotations_saved),
                                bg="#d4fcd4")
         save_button.pack(pady=2, fill=tk.X)
 
@@ -445,3 +446,36 @@ class GalleryNavigator:
 
         # Optional: Referenz zum Frame speichern
         self.bottom_frame = bottom_frame
+
+    def save_annotation_gui(self, on_complete=None):
+        """
+        shows spinner while saving runs in background.
+        """
+
+        popup = tk.Toplevel()
+        popup.title("Saving Annotations")
+        popup.geometry("300x100")
+        popup.resizable(False, False)
+        popup.transient(self.patient_window)
+        popup.grab_set()
+
+        tk.Label(popup, text="Please wait... Saving annotations").pack(pady=10)
+
+        spinner = ttk.Progressbar(popup, mode="indeterminate", length=250)
+        spinner.pack(pady=10)
+        spinner.start(10)
+
+        def worker():
+            try:
+                self.annotation_loader.save_annotations_to_anno_table()
+            finally:
+                def cleanup():
+                    spinner.stop()
+                    popup.destroy()
+                    if on_complete:
+                        on_complete()
+
+                self.patient_window.after(0, cleanup)
+
+        # Start the worker thread
+        threading.Thread(target=worker, daemon=True).start()
