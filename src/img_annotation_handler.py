@@ -2,6 +2,7 @@ import tkinter as tk
 import pandas as pd
 import statistics as stat
 import os
+import ast
 
 from annotation_loader import AnnotationLoader
 
@@ -18,7 +19,7 @@ class ImgAnnotationHandler:
         self.resize_handle_size = 3
 
         self.selected_annotation_index = None
-        self.modify_mode = False
+        #self.modify_mode = False
 
         self.dragging_handle = None
         self.dragging_rectangle = False
@@ -52,24 +53,38 @@ class ImgAnnotationHandler:
 
         # Initialize the list in the DataFrame cell
         def append_or_init_list(cell, value):
-            if isinstance(cell, list):
-                cell.append(value)
-            elif pd.isna(cell) or cell == "NN":
+
+            if pd.isna(cell) or cell == "NN":
                 return [value]
-            else:
-                return [cell, value]  # Fallback für Einzelwerte
-            return cell
+    
+            # Falls String wie "[123, 456]", dann versuche in Liste zu parsen
+            if isinstance(cell, str):
+                try:
+                    parsed = ast.literal_eval(cell)
+                    if isinstance(parsed, list):
+                        return parsed + [value]
+                except (ValueError, SyntaxError):
+                    pass
+                return [cell, value]
+
+            # Falls echte Liste
+            if isinstance(cell, list):
+                return cell + [value]
+
+            # Fallback für Einzelwerte (int, float, etc.)
+            return [cell, value]
     
         for col, val in zip(['x', 'y', 'w', 'h', 'class'], [x, y, w, h, img_selected_class]):
             self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
         print(self.gui.all_annotations["x"])
 
-        self.update_image_listbox_with_annotation_colors()
+        
         print(f"[DEBUG] Add Annotation: new rect with rect_id {self.rect_id} was added to internal list.")
 
         self.drawn_rect_ids.append(self.rect_id)
         print(f"[DEBUG] Added rect_id {self.rect_id} to drawn_rect_ids. List size now: {len(self.drawn_rect_ids)}")
-
+        
+        self.update_image_listbox_with_annotation_colors() # does not work yet
 
 
     def delete_annotation(self):
@@ -85,6 +100,7 @@ class ImgAnnotationHandler:
             print("[ERROR] 'img_ID' column not found in DataFrame.")
             return
 
+        # Passende Zeile zur Bild-ID finden
         match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
         if not match.any():
             print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
@@ -93,30 +109,36 @@ class ImgAnnotationHandler:
         idx = self.gui.all_annotations[match].index[0]
 
         try:
-            # Werte aus den Spalten holen
-            x_list = self.gui.all_annotations.at[idx, 'x']
-            y_list = self.gui.all_annotations.at[idx, 'y']
-            w_list = self.gui.all_annotations.at[idx, 'w']
-            h_list = self.gui.all_annotations.at[idx, 'h']
-            class_list = self.gui.all_annotations.at[idx, 'class']
+            # Spaltennamen
+            cols = ['x', 'y', 'w', 'h', 'class']
 
-            # Entfernen des Eintrags an Position `index`, nur wenn Listen vorhanden sind
-            for col_name, data_list in zip(['x', 'y', 'w', 'h', 'class'], [x_list, y_list, w_list, h_list, class_list]):
-                if isinstance(data_list, list) and len(data_list) > index:
-                    data_list.pop(index)
+            for col in cols:
+                val = self.gui.all_annotations.at[idx, col]
+                # Versuche, val in Liste umzuwandeln, wenn nötig
+                if isinstance(val, str) and val.startswith('['):
+                    val = ast.literal_eval(val)
+                elif not isinstance(val, list):
+                    val = []
 
-            # Entferne Rechteck (falls vorhanden)
+                # Eintrag an 'index' entfernen, falls möglich
+                if len(val) > index:
+                    val.pop(index)
+
+                # Zurückschreiben
+                self.gui.all_annotations.at[idx, col] = val if val else "NN"
+
+            # Rechteck entfernen
             if index < len(self.drawn_rect_ids):
                 rect_id = self.drawn_rect_ids[index]
                 self.gui.image_canvas.delete(rect_id)
                 self.drawn_rect_ids.pop(index)
 
-            # Entferne Resize-Handles
+            # Resize-Handles entfernen
             for handle in self.resize_handles:
                 self.gui.image_canvas.delete(handle)
             self.resize_handles.clear()
 
-            # Entferne Eintrag aus Listbox
+            # Listbox-Eintrag entfernen
             self.gui.img_annotation_listbox.delete(index)
 
             self.update_image_listbox_with_annotation_colors()
@@ -124,6 +146,7 @@ class ImgAnnotationHandler:
 
         except Exception as e:
             print(f"[ERROR] Failed to delete annotation: {e}")
+
 
 
 
@@ -136,6 +159,7 @@ class ImgAnnotationHandler:
 
         # Filter nach Bild-ID
         filtered_df = df[df['img_ID'].astype(str).str.strip() == str(image_id).strip()]
+
         if filtered_df.empty:
             print("[INFO] No annotations found for this image.")
             return
@@ -148,11 +172,14 @@ class ImgAnnotationHandler:
         row = filtered_df.iloc[0]
 
         # Hole Annotationen-Listen
-        x_list = row['x'] if isinstance(row['x'], list) else []
-        y_list = row['y'] if isinstance(row['y'], list) else []
-        w_list = row['w'] if isinstance(row['w'], list) else []
-        h_list = row['h'] if isinstance(row['h'], list) else []
-        class_list = row['class'] if isinstance(row['class'], list) else []
+        x_list = ast.literal_eval(row['x']) if isinstance(row['x'], str) and row['x'].startswith('[') else row['x'] if isinstance(row['x'], list) else []
+        y_list = ast.literal_eval(row['y']) if isinstance(row['y'], str) and row['y'].startswith('[') else row['y'] if isinstance(row['y'], list) else []
+        w_list = ast.literal_eval(row['w']) if isinstance(row['w'], str) and row['w'].startswith('[') else row['w'] if isinstance(row['w'], list) else []
+        h_list = ast.literal_eval(row['h']) if isinstance(row['h'], str) and row['h'].startswith('[') else row['h'] if isinstance(row['h'], list) else []
+        class_list = ast.literal_eval(row['class']) if isinstance(row['class'], str) and row['x'].startswith('[') else row['class'] if isinstance(row['class'], list) else []
+
+        print(f"[DEBUG] x_list: {x_list}")
+
 
         count = min(len(x_list), len(y_list), len(w_list), len(h_list), len(class_list))
         rect_ids = []
@@ -188,7 +215,8 @@ class ImgAnnotationHandler:
         """
         Starts drawing or modifying a rectangle depending on mode.
         """
-        if not self.modify_mode:
+
+        if not self.gui.modify_mode.get():
             # Neuer Draw-Start
             self.is_drawing = True
             self.rect_start = (event.x, event.y)
@@ -204,7 +232,7 @@ class ImgAnnotationHandler:
         """
         Continues drawing or modifying the rectangle while the mouse is dragged.
         """
-        if not self.modify_mode:
+        if not self.gui.modify_mode.get():
             if self.is_drawing and self.rect_id:
                 self.gui.image_canvas.coords(
                     self.rect_id,
@@ -223,7 +251,7 @@ class ImgAnnotationHandler:
         """
         Finishes drawing or modifying. Automatically updates the annotation.
         """
-        if not self.modify_mode:
+        if not self.gui.modify_mode.get():
             if self.is_drawing:
                 self.rect_end = (event.x, event.y)
                 self.is_drawing = False
@@ -232,8 +260,6 @@ class ImgAnnotationHandler:
             self.dragging_rectangle = False
             self.last_mouse_pos = None
 
-        self.modify_mode = False
-        self.remove_resize_handles()
 
     def calculate_rectangle(self):
         """
@@ -259,12 +285,12 @@ class ImgAnnotationHandler:
         """
         Triggered when a listbox annotation is selected. Clears handles.
         """
+        #self.gui.modify_mode = tk.BooleanVar(value=False)  # Turns off modify mode when selecting an annotation
         self.remove_resize_handles()
-        self.modify_mode = False
         selection = self.gui.img_annotation_listbox.curselection()
         if selection:
             self.selected_annotation_original_index = selection[0]
-            self.modify_mode = True
+            #self.modify_mode = True
 
 
     def clear_all_annotations(self):
@@ -285,6 +311,86 @@ class ImgAnnotationHandler:
 
         # Resize-Handles entfernen
         self.remove_resize_handles()
+
+
+    def modify_annotation(self):
+
+        if not self.gui.modify_mode.get():
+            self.remove_resize_handles()
+            print("[Modify] Modify Mode is OFF – skipping.")
+            return
+
+        selection = self.gui.img_annotation_listbox.curselection()
+        if not selection:
+            print("Modify Error: No annotation selected in the listbox.")
+            return
+
+        listbox_index = selection[0]
+        current_image_id = self.gui.selected_image_index.split(".")[0].strip()
+
+        # Filter die richtige Zeile (ein Bild = eine Zeile in df)
+        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == current_image_id
+        if not match.any():
+            print(f"[ERROR] No row found for img_ID = {current_image_id}")
+            return
+
+        df_index = self.gui.all_annotations[match].index[0]
+
+        row = self.gui.all_annotations.loc[df_index]
+
+        # for col in ['x', 'y', 'w', 'h', 'class']:
+        #     print(col, row[col])
+        # # Sicherstellen, dass alle Werte Listen sind
+        # if not all(isinstance(row[col], list) for col in ['x', 'y', 'w', 'h', 'class']):
+        #     print("[ERROR] Data row is not properly formatted as lists.")
+        #     return
+        
+        x_list = ast.literal_eval(row['x']) if isinstance(row['x'], str) and row['x'].startswith('[') else row['x'] if isinstance(row['x'], list) else []
+        y_list = ast.literal_eval(row['y']) if isinstance(row['y'], str) and row['y'].startswith('[') else row['y'] if isinstance(row['y'], list) else []
+        w_list = ast.literal_eval(row['w']) if isinstance(row['w'], str) and row['w'].startswith('[') else row['w'] if isinstance(row['w'], list) else []
+        h_list = ast.literal_eval(row['h']) if isinstance(row['h'], str) and row['h'].startswith('[') else row['h'] if isinstance(row['h'], list) else []
+        class_list = ast.literal_eval(row['class']) if isinstance(row['class'], str) and row['x'].startswith('[') else row['class'] if isinstance(row['class'], list) else []
+
+        try:
+            # Zugriff auf die Annotation an der Stelle des Listbox-Eintrags
+            x = x_list[listbox_index]
+            y = y_list[listbox_index]
+            w = w_list[listbox_index]
+            h = h_list[listbox_index]
+        except IndexError:
+            print(f"[ERROR] Annotation index {listbox_index} out of range in DataFrame lists.")
+            return
+
+        print(f"[DEBUG] rect_id: {self.rect_id}, x: {x}, y: {y}, w: {w}, h: {h}")
+        print(self.drawn_rect_ids)
+        # Canvas-Element finden: du brauchst dafür einen rect_id-Cache pro Annotation (z.B. in extra Liste speichern)
+        try:
+            self.rect_id = self.drawn_rect_ids[listbox_index]
+            print(self.rect_id)
+        except IndexError:
+            print(f"[ERROR] rect_id index {listbox_index} out of range.")
+            return
+
+
+        try:
+            
+            coords = self.gui.image_canvas.coords(self.rect_id)
+            if not coords or len(coords) < 4:
+                print(f"Invalid rect_id: {self.rect_id}, coords: {coords}")
+                return
+        except tk.TclError:
+            print(f"rect_id {self.rect_id} is invalid (possibly deleted).")
+            return
+
+        # Setze Zustand für Änderung
+        self.selected_annotation_df_index = df_index
+        self.selected_annotation_list_index = listbox_index
+        self.rect_start = (coords[0], coords[1])
+        self.rect_end = (coords[2], coords[3])
+        self.create_resize_handles()
+
+        print(f"[DEBUG] Modification mode ON → df_row: {df_index}, list_index: {listbox_index}, rect_id: {self.rect_id}")
+
 
 
     def create_resize_handles(self):
@@ -322,7 +428,11 @@ class ImgAnnotationHandler:
     def move_rectangle(self, x, y):
         """
         Moves the rectangle and updates its position and annotation.
+        Only active in modify mode.
         """
+        if not self.gui.modify_mode.get():
+            return
+
         dx = x - self.last_mouse_pos[0]
         dy = y - self.last_mouse_pos[1]
 
@@ -334,10 +444,15 @@ class ImgAnnotationHandler:
         self.gui.image_canvas.coords(self.rect_id, self.rect_start[0], self.rect_start[1], self.rect_end[0], self.rect_end[1])
         self.update_resize_handles()
 
+
     def resize_rectangle(self, x, y, handle):
         """
         Resizes the rectangle based on which corner handle is dragged.
+        Only active in modify mode.
         """
+        if not self.gui.modify_mode.get():
+            return
+
         x1, y1 = self.rect_start
         x2, y2 = self.rect_end
 
@@ -355,6 +470,7 @@ class ImgAnnotationHandler:
         self.gui.image_canvas.coords(self.rect_id, self.rect_start[0], self.rect_start[1], self.rect_end[0], self.rect_end[1])
         self.update_resize_handles()
 
+
     def update_resize_handles(self):
         """
         Refreshes the resize handles to match the new rectangle position.
@@ -366,6 +482,7 @@ class ImgAnnotationHandler:
         """
         Checks if (x, y) is inside the current rectangle.
         """
+
         x1, y1 = self.rect_start
         x2, y2 = self.rect_end
 
@@ -373,6 +490,7 @@ class ImgAnnotationHandler:
         if y1 > y2: y1, y2 = y2, y1
 
         return x1 <= x <= x2 and y1 <= y <= y2
+        
 
     def get_handle_at_position(self, x, y):
         """

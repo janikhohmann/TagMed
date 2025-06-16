@@ -29,7 +29,7 @@ class GalleryNavigator:
         self.img_annotation_handler = ImgAnnotationHandler(self)
 
         self.video_mode = False  # Flag to indicate if video mode is active
-        self.modify_mode = False  # Flag to indicate if modify mode is active
+        self.modify_mode = tk.BooleanVar(value=False)  # Flag to indicate if modify mode is active
         self.bounding_box_mode = False  # Flag to indicate if bounding box mode is active
         self.mask_mode = False  # Flag to indicate if mask mode is active
         self.click_mode = False  # Flag to indicate if click mode is active
@@ -418,8 +418,7 @@ class GalleryNavigator:
         save_button.pack(pady=2, fill=tk.X)
 
         # Modify Mode Toggle (Checkbutton)
-        # self.modify_mode_var wurde in __init__ initialisiert
-        modify_toggle = ttk.Checkbutton(controls_frame, text="Modify Mode", variable=self.modify_mode)
+        modify_toggle = ttk.Checkbutton(controls_frame, text="Modify Mode", variable=self.modify_mode, command=self.img_annotation_handler.modify_annotation)
         modify_toggle.pack(pady=(10, 2), anchor="w") # Etwas Abstand nach oben, linksbündig
 
         # --- Spalte 2: Listbox für Objects ---
