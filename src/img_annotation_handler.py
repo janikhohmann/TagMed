@@ -286,11 +286,28 @@ class ImgAnnotationHandler:
         Triggered when a listbox annotation is selected. Clears handles.
         """
         #self.gui.modify_mode = tk.BooleanVar(value=False)  # Turns off modify mode when selecting an annotation
+        # self.remove_resize_handles()
+        # selection = self.gui.img_annotation_listbox.curselection()
+        # if selection:
+        #     self.selected_annotation_original_index = selection[0]
+        #     #self.modify_mode = True
         self.remove_resize_handles()
         selection = self.gui.img_annotation_listbox.curselection()
-        if selection:
-            self.selected_annotation_original_index = selection[0]
-            #self.modify_mode = True
+        if not selection:
+            return
+        listbox_index = selection[0]
+
+        current_image_id = self.gui.selected_image_index.split(".")[0].strip()
+        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == current_image_id
+        if not match.any():
+            print(f"[ERROR] No row found for img_ID = {current_image_id}")
+            return
+        df_index = self.gui.all_annotations[match].index[0]
+
+        # Setze den DataFrame Index und row als Attribute, damit update es nutzen kann
+        self.selected_annotation_original_index = df_index
+        self.row = self.gui.all_annotations.loc[df_index]
+        self.listbox_index = listbox_index
 
 
     def clear_all_annotations(self):
@@ -325,8 +342,6 @@ class ImgAnnotationHandler:
             print("Modify Error: No annotation selected in the listbox.")
             return
 
-        listbox_index = selection[0]
-        self.listbox_index = listbox_index 
         current_image_id = self.gui.selected_image_index.split(".")[0].strip()
 
         # Filter die richtige Zeile (ein Bild = eine Zeile in df)
@@ -348,22 +363,22 @@ class ImgAnnotationHandler:
 
         try:
             # Zugriff auf die Annotation an der Stelle des Listbox-Eintrags
-            x = x_list[listbox_index]
-            y = y_list[listbox_index]
-            w = w_list[listbox_index]
-            h = h_list[listbox_index]
+            x = x_list[self.listbox_index]
+            y = y_list[self.listbox_index]
+            w = w_list[self.listbox_index]
+            h = h_list[self.listbox_index]
         except IndexError:
-            print(f"[ERROR] Annotation index {listbox_index} out of range in DataFrame lists.")
+            print(f"[ERROR] Annotation index {self.listbox_index} out of range in DataFrame lists.")
             return
 
         print(f"[DEBUG] rect_id: {self.rect_id}, x: {x}, y: {y}, w: {w}, h: {h}")
         print(self.drawn_rect_ids)
         # Canvas-Element finden: du brauchst dafür einen rect_id-Cache pro Annotation (z.B. in extra Liste speichern)
         try:
-            self.rect_id = self.drawn_rect_ids[listbox_index]
+            self.rect_id = self.drawn_rect_ids[self.listbox_index]
             print(self.rect_id)
         except IndexError:
-            print(f"[ERROR] rect_id index {listbox_index} out of range.")
+            print(f"[ERROR] rect_id index {self.listbox_index} out of range.")
             return
 
 
@@ -379,12 +394,11 @@ class ImgAnnotationHandler:
 
         # Setze Zustand für Änderung
         self.selected_annotation_df_index = df_index
-        self.selected_annotation_list_index = listbox_index
         self.rect_start = (coords[0], coords[1])
         self.rect_end = (coords[2], coords[3])
         self.create_resize_handles()
 
-        print(f"[DEBUG] Modification mode ON → df_row: {df_index}, list_index: {listbox_index}, rect_id: {self.rect_id}")
+        print(f"[DEBUG] Modification mode ON → df_row: {df_index}, list_index: {self.listbox_index}, rect_id: {self.rect_id}")
 
 
 
@@ -528,16 +542,14 @@ class ImgAnnotationHandler:
         # Neue Geometrie berechnen
         new_x, new_y, new_w, new_h = self.calculate_rectangle()
         
-        # Den Listenindex der Annotation
-        annotation_idx = self.listbox_index
         
-        row = self.row
+        
         # Bestehende Listen aus dem DataFrame lesen und parsen
-        x_list = ast.literal_eval(row['x']) if isinstance(row['x'], str) and row['x'].startswith('[') else row['x'] if isinstance(row['x'], list) else []
-        y_list = ast.literal_eval(row['y']) if isinstance(row['y'], str) and row['y'].startswith('[') else row['y'] if isinstance(row['y'], list) else []
-        w_list = ast.literal_eval(row['w']) if isinstance(row['w'], str) and row['w'].startswith('[') else row['w'] if isinstance(row['w'], list) else []
-        h_list = ast.literal_eval(row['h']) if isinstance(row['h'], str) and row['h'].startswith('[') else row['h'] if isinstance(row['h'], list) else []
-        class_list = ast.literal_eval(row['class']) if isinstance(row['class'], str) and row['x'].startswith('[') else row['class'] if isinstance(row['class'], list) else []
+        x_list = ast.literal_eval(self.row['x']) if isinstance(self.row['x'], str) and self.row['x'].startswith('[') else self.row['x'] if isinstance(self.row['x'], list) else []
+        y_list = ast.literal_eval(self.row['y']) if isinstance(self.row['y'], str) and self.row['y'].startswith('[') else self.row['y'] if isinstance(self.row['y'], list) else []
+        w_list = ast.literal_eval(self.row['w']) if isinstance(self.row['w'], str) and self.row['w'].startswith('[') else self.row['w'] if isinstance(self.row['w'], list) else []
+        h_list = ast.literal_eval(self.row['h']) if isinstance(self.row['h'], str) and self.row['h'].startswith('[') else self.row['h'] if isinstance(self.row['h'], list) else []
+        class_list = ast.literal_eval(self.row['class']) if isinstance(self.row['class'], str) and self.row['x'].startswith('[') else self.row['class'] if isinstance(self.row['class'], list) else []
 
         # print("DEBUG x list "), self.gui.all_annotations.at[self.selected_annotation_original_index, 'x']
 
@@ -552,15 +564,15 @@ class ImgAnnotationHandler:
 
 
         # Prüfen, ob annotation_idx gültig ist
-        if annotation_idx >= len(x_list) or annotation_idx >= len(y_list) or annotation_idx >= len(w_list) or annotation_idx >= len(h_list):
-            print(f"[Update Error] annotation index {annotation_idx} out of range in DataFrame lists.")
+        if self.listbox_index >= len(x_list) or self.listbox_index >= len(y_list) or self.listbox_index >= len(w_list) or self.listbox_index >= len(h_list):
+            print(f"[Update Error] annotation index {self.listbox_index} out of range in DataFrame lists.")
             return
 
         # Listen an der Stelle annotation_idx aktualisieren
-        x_list[annotation_idx] = new_x
-        y_list[annotation_idx] = new_y
-        w_list[annotation_idx] = new_w
-        h_list[annotation_idx] = new_h
+        x_list[self.listbox_index] = new_x
+        y_list[self.listbox_index] = new_y
+        w_list[self.listbox_index] = new_w
+        h_list[self.listbox_index] = new_h
 
         print("DEBUG x list ", x_list)
 
@@ -575,20 +587,19 @@ class ImgAnnotationHandler:
         # print(f"[DEBUG] Updated annotation index {annotation_idx} in DataFrame row {self.selected_annotation_original_index} → x:{new_x}, y:{new_y}, w:{new_w}, h:{new_h}")
 
         # Listbox-Eintrag aktualisieren (Klassen-Label hier einzeln aus der Liste holen)
-        if annotation_idx < len(class_list):
-            class_label = class_list[annotation_idx]
+        if self.listbox_index < len(class_list):
+            class_label = class_list[self.listbox_index]
         else:
             class_label = "Unknown"
 
         selected_in_listbox = self.gui.img_annotation_listbox.curselection()
         if selected_in_listbox:
-            listbox_index = selected_in_listbox[0]
             updated_text = f"{str(class_label).ljust(12)} x:{str(new_x).ljust(5)} y:{str(new_y).ljust(5)} w:{str(new_w).ljust(5)} h:{str(new_h).ljust(5)}"
 
-            self.gui.img_annotation_listbox.delete(listbox_index)
-            self.gui.img_annotation_listbox.insert(listbox_index, updated_text)
-            self.gui.img_annotation_listbox.selection_set(listbox_index)
-            self.gui.img_annotation_listbox.activate(listbox_index)
+            self.gui.img_annotation_listbox.delete(self.listbox_index)
+            self.gui.img_annotation_listbox.insert(self.listbox_index, updated_text)
+            self.gui.img_annotation_listbox.selection_set(self.listbox_index)
+            self.gui.img_annotation_listbox.activate(self.listbox_index)
         else:
             print("[Warning] Could not find selected item in listbox to update its text.")
 
