@@ -172,7 +172,7 @@ class AnnotationLoader():
 
         for root, dirs, files in os.walk(image_folder):
             for file in files:
-                if not file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
+                if not file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', ".mov", ".mp4")):
                     continue  # only image files
                 rel_path = os.path.relpath(root, image_folder)
                 parts = rel_path.split(os.sep)
