@@ -370,6 +370,8 @@ class GalleryNavigator:
         elif answer is False:
             self.patient_window.destroy()
 
+
+
     def setup_img_bottom_frame(self, parent):
         """
         Setup for bottom frame - sets grid configuration, calls img_annotation_handler
@@ -395,7 +397,7 @@ class GalleryNavigator:
 
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.img_annotation_type = tk.StringVar()
-        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_annotation_type, values=["Bounding Box", "Mask"], width=15)
+        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_annotation_type, values=["Bounding Box", "Polygon"], width=15)
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
@@ -446,6 +448,10 @@ class GalleryNavigator:
         else:
             print("Warnung: self.image_canvas ist nicht initialisiert. Bindings nicht gesetzt.")
 
+        # Slider + zusätzliche Steuerungen (Spalte 3) - stays empty for images
+        slider_frame = tk.Frame(bottom_frame, width=600, height=150)
+        slider_frame.grid(row=1, column=3, sticky="nsew", padx=(10, 10), pady=0)
+        slider_frame.grid_propagate(False)
 
         # Optional: Referenz zum Frame speichern
         self.bottom_frame = bottom_frame
@@ -458,45 +464,41 @@ class GalleryNavigator:
         bottom_frame = tk.Frame(parent, height=200, relief=tk.SUNKEN, borderwidth=1)
         bottom_frame.grid(row=1, column=0, columnspan=4, padx=2, pady=2, sticky="nsew")
 
-        # Grid-Konfiguration
         bottom_frame.grid_columnconfigure(0, weight=0)  # Dropdowns
         bottom_frame.grid_columnconfigure(1, weight=0)  # Buttons + Toggles
         bottom_frame.grid_columnconfigure(2, weight=1)  # Listbox
         bottom_frame.grid_columnconfigure(3, weight=0)  # Slider
         bottom_frame.grid_rowconfigure(1, weight=1)
 
-        # --- Header über den Steuerelementen ---
+        # Header
         header = tk.Label(bottom_frame, text="Annotation Properties", font=("Arial", 12, "bold"))
         header.grid(row=0, column=0, columnspan=4, sticky="w", padx=5, pady=(10, 5))
 
-        # --- Spalte 0: Dropdowns ---
+        # Dropdowns (Spalte 0)
         dropdown_frame = tk.Frame(bottom_frame)
         dropdown_frame.grid(row=1, column=0, sticky="nw", padx=5, pady=5)
 
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.video_annotation_type = tk.StringVar()
-        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_annotation_type, values=["Bounding Box", "Mask"], width=15)
+        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_annotation_type,
+                                    values=["Bounding Box", "Mask"], width=15)
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
         tk.Label(dropdown_frame, text="Class:").pack(anchor="w", padx=5)
         self.video_selected_class = tk.StringVar()
-        class_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_selected_class, values=self.class_list, width=15)
+        class_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_selected_class,
+                                    values=self.class_list, width=15)
         class_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         if self.class_list:
             class_dropdown.current(0)
 
-        tk.Label(dropdown_frame, text="Tracking Model:").pack(anchor="w", padx=5)
-        self.tracking_type = tk.StringVar()
-        tracking_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.tracking_type, values=["Simple", "Advanced"], width=15)
-        tracking_dropdown.pack(anchor="w", padx=5)
-        tracking_dropdown.current(0)
-
-        # --- Spalte 1: Buttons und Toggles ---
+        # Buttons (Spalte 1)
         controls_frame = tk.Frame(bottom_frame)
         controls_frame.grid(row=1, column=1, sticky="n", padx=5, pady=5)
 
-        add_button = tk.Button(controls_frame, text="Add", width=12, command=self.video_annotation_handler.add_annotation)
+        add_button = tk.Button(controls_frame, text="Add", width=12,
+                            command=self.video_annotation_handler.add_annotation)
         add_button.pack(pady=2, fill=tk.X)
 
         delete_button = tk.Button(controls_frame, text="Delete", width=12)
@@ -509,20 +511,12 @@ class GalleryNavigator:
                                 bg="#d4fcd4")
         save_button.pack(pady=2, fill=tk.X)
 
-        # Modify Mode Toggle
-        modify_toggle = ttk.Checkbutton(controls_frame, text="Modify Mode", variable=self.modify_mode, command=self.video_annotation_handler.modify_annotation)
+        modify_toggle = ttk.Checkbutton(controls_frame, text="Modify Mode",
+                                        variable=self.modify_mode,
+                                        command=self.video_annotation_handler.modify_annotation)
         modify_toggle.pack(pady=(10, 2), anchor="w")
 
-        # Show Mask Toggle
-        self.mask_toggle_button = ttk.Checkbutton(
-            controls_frame,
-            text="Show Masks",
-            variable=self.masks_visible,
-            command=self.video_annotation_handler.toggle_mask_visibility
-        )
-        self.mask_toggle_button.pack(pady=(10, 2), anchor="w")
-
-        # --- Spalte 2: Listbox für Objekte ---
+        # Listbox (Spalte 2)
         listbox_area_frame = tk.Frame(bottom_frame)
         listbox_area_frame.grid(row=1, column=2, sticky="nsew", padx=(5, 10), pady=5)
         listbox_area_frame.grid_columnconfigure(0, weight=1)
@@ -530,11 +524,11 @@ class GalleryNavigator:
 
         tk.Label(listbox_area_frame, text="Objects:").grid(row=0, column=0, sticky="sw")
         self.video_annotation_listbox = tk.Listbox(listbox_area_frame, height=6, width=50)
-        self.video_annotation_listbox.grid(row=1, column=0, sticky="nsew")
+        self.video_annotation_listbox.grid(row=1, column=0, sticky="nw", pady=(2, 0))
 
-        self.video_annotation_listbox.bind("<<ListboxSelect>>", lambda event: self.video_annotation_handler.on_annotation_selected(event))
+        self.video_annotation_listbox.bind("<<ListboxSelect>>",
+                                        lambda event: self.video_annotation_handler.on_annotation_selected(event))
 
-        # Canvas Bindings
         if self.frame_canvas:
             self.video_annotation_handler.frame_canvas = self.frame_canvas
             self.frame_canvas.bind("<ButtonPress-1>", self.video_annotation_handler.on_press)
@@ -543,9 +537,9 @@ class GalleryNavigator:
         else:
             print("Warnung: self.frame_canvas ist nicht initialisiert. Bindings nicht gesetzt.")
 
-        # --- Spalte 3: Slider ---
+        # Slider + zusätzliche Steuerungen (Spalte 3)
         slider_frame = tk.Frame(bottom_frame, width=600, height=150)
-        slider_frame.grid(row=1, column=3, sticky="nsew", padx=(10, 10), pady=5)
+        slider_frame.grid(row=1, column=3, sticky="nsew", padx=(10, 10), pady=0)
         slider_frame.grid_propagate(False)
 
         self.frame_index_label = tk.Label(slider_frame, text="Frame 1 / 1", font=("Arial", 10))
@@ -560,132 +554,53 @@ class GalleryNavigator:
         )
         self.video_slider.pack(pady=(5, 5))
 
-        # Navigation Buttons unterhalb des Sliders
+        
+        # Neue horizontale Leiste unter dem Slider
         button_row = tk.Frame(slider_frame)
-        button_row.pack()
+        button_row.pack(pady=(0, 0))
 
-        left_button = tk.Button(button_row, text="←", width=4, command=lambda: self.video_slider.set(self.video_slider.get() - 1))
+        left_button = tk.Button(button_row, text="←", width=4,
+                                command=lambda: self.video_slider.set(self.video_slider.get() - 1))
         left_button.pack(side="left", padx=5)
 
-        right_button = tk.Button(button_row, text="→", width=4, command=lambda: self.video_slider.set(self.video_slider.get() + 1))
+        right_button = tk.Button(button_row, text="→", width=4,
+                                command=lambda: self.video_slider.set(self.video_slider.get() + 1))
         right_button.pack(side="left", padx=5)
 
-        #self.bottom_frame = bottom_frame
-
-
-    # def setup_video_bottom_frame(self, parent):
-    #     """
-    #     Setup for bottom frame - sets grid configuration, adds annotation controls and a custom slider.
-    #     """
-    #     bottom_frame = tk.Frame(parent, height=200)
-    #     bottom_frame.grid(row=1, column=0, columnspan=4, padx=2, pady=2, sticky="nsew")
-
-    #     # Grid-Configuration
-    #     for i in range(4):  # updated to 4 columns
-    #         bottom_frame.grid_columnconfigure(i, weight=0)
-
-    #     # --- Header above Dropdowns + Buttons ---
-    #     header = tk.Label(bottom_frame, text="Annotation Properties", font=("Arial", 12, "bold"))
-    #     header.grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=(10, 0))
-
-    #     # --- Dropdowns in column 0 ---
-    #     tk.Label(bottom_frame, text="Type:").grid(row=1, column=0, sticky="w", padx=5)
-    #     self.video_annotation_type = tk.StringVar()
-    #     type_dropdown = ttk.Combobox(bottom_frame, textvariable=self.video_annotation_type, values=["Bounding Box", "Mask"])
-    #     type_dropdown.grid(row=2, column=0, sticky="w", padx=5)
-    #     type_dropdown.current(0)
-
-    #     tk.Label(bottom_frame, text="Class:").grid(row=3, column=0, sticky="w", padx=5)
-    #     self.video_selected_class = tk.StringVar()
-    #     class_dropdown = ttk.Combobox(bottom_frame, textvariable=self.video_selected_class, values=self.class_list)
-    #     class_dropdown.grid(row=4, column=0, sticky="w", padx=5)
-    #     class_dropdown.current(0)
-
-    #     tk.Label(bottom_frame, text="Tracking Model:").grid(row=5, column=0, sticky="w", padx=5)
-    #     self.tracking_type = tk.StringVar()
-    #     type_dropdown = ttk.Combobox(bottom_frame, textvariable=self.tracking_type, values=["Simple", "Advanced"])
-    #     type_dropdown.grid(row=6, column=0, sticky="w", padx=5)
-    #     type_dropdown.current(0)
-
-    #     # --- Buttons in column 1 ---
-    #     button_frame = tk.Frame(bottom_frame)
-    #     button_frame.grid(row=2, column=1, rowspan=3, sticky="n", padx=5, pady=5)
-
-    #     add_button = tk.Button(button_frame, text="Add", width=10, command=self.video_annotation_handler.add_annotation)
-    #     add_button.pack(pady=2)
-
-    #     delete_button = tk.Button(button_frame, text="Delete", width=10)
-    #     delete_button.pack(pady=2)
-
-    #     # Single klick -> deleting just one annotation
-    #     delete_button.bind("<Button-1>", lambda event: self.video_annotation_handler.delete_annotation())
-    #     # Double klick -> deleting annotations for the whole video
-    #     delete_button.bind("<Double-Button-1>", lambda event: self.delete_annotations_for_all_frames_question())
-
-    #     modify_button = tk.Button(button_frame, text="Modify", width=10, command=self.video_annotation_handler.modify_annotation)
-    #     modify_button.pack(pady=2)
-        
-    #     # Add Save button
-    #     save_button = tk.Button(button_frame, text="Save", width=10, 
-    #                            command=self.annotation_loader.save_annotations_to_anno_table,
-    #                            bg="#d4fcd4")  # Light green background to highlight importance
-    #     save_button.pack(pady=2)
-
-    #     modify_toggle = ttk.Checkbutton(controls_frame, text="Modify Mode", variable=self.modify_mode, command=self.img_annotation_handler.modify_annotation)
-    #     modify_toggle.pack(pady=(10, 2), anchor="w") # Etwas Abstand nach oben, linksbündig
-
-    #     self.mask_toggle_button = tk.Checkbutton(
-    #         button_frame,  # z. B. self.video_controls_frame oder self.root
-    #         text="Show Masks",
-    #         variable=self.masks_visible,
-    #         command=self.video_annotation_handler.toggle_mask_visibility
-    #     )
-    #     self.mask_toggle_button.pack(pady=2) 
+        # Seperator under slider unit
+        separator = tk.Frame(slider_frame, height=1, bg="black")  # Hellgrau
+        separator.pack(fill="x",  padx=0, pady=4)
 
 
 
-    #     # --- Listbox in column 2 ---
-    #     tk.Label(bottom_frame, text="Objects:").grid(row=1, column=2, sticky="sw", padx=(5, 0))
-    #     self.video_annotation_listbox = tk.Listbox(bottom_frame, height=6, width=50)
-    #     self.video_annotation_listbox.grid(row=2, column=2, rowspan=3, sticky="nse", padx=(5, 10), pady=5)
+        # Navigation Buttons unterhalb
+        tracker_controls_row = tk.Frame(slider_frame)
+        tracker_controls_row.pack(pady=(15, 2), fill="x")
 
-    #     self.video_annotation_handler.frame_canvas = self.frame_canvas
-    #     self.video_annotation_listbox.bind("<<ListboxSelect>>", lambda event: self.video_annotation_handler.on_annotation_selected(event))
-    #     self.frame_canvas.bind("<ButtonPress-1>", self.video_annotation_handler.on_press)
-    #     self.frame_canvas.bind("<B1-Motion>", self.video_annotation_handler.on_drag)
-    #     self.frame_canvas.bind("<ButtonRelease-1>", self.video_annotation_handler.on_release)
+        # Tracking-Dropdown
+        self.tracking_type = tk.StringVar()
+        tracking_dropdown = ttk.Combobox(tracker_controls_row, textvariable=self.tracking_type,
+                                        values=["Simple", "Advanced"], width=12)
+        tracking_dropdown.pack(side="left", padx=5)
+        tracking_dropdown.current(0)
 
-    #     # --- Custom Slider Area in column 3 ---
-    #     slider_frame = tk.Frame(bottom_frame, width=600, height=150)
-    #     slider_frame.grid(row=1, column=3, rowspan=4, sticky="nsew", padx=(10, 10), pady=5)
-    #     slider_frame.grid_propagate(False)  # fix width/height
+        # Masken-Checkbox
+        self.mask_toggle_button = ttk.Checkbutton(
+            tracker_controls_row,
+            text="Show Masks",
+            variable=self.masks_visible,
+            command=self.video_annotation_handler.toggle_mask_visibility
+        )
+        self.mask_toggle_button.pack(side="left", padx=5)
 
-    #     # Frame index label above the slider
-    #     self.frame_index_label = tk.Label(slider_frame, text="Frame 1 / 1", font=("Arial", 10))
-    #     self.frame_index_label.pack(pady=(5, 0))
+        # Tracker Prompt Button (Platzhalter)
+        tracker_prompt_button = tk.Button(tracker_controls_row, text="Tracker Prompts", width=16)
+        tracker_prompt_button.pack(side="left", padx=5)
 
-    #     # Create slider
-    #     self.video_slider = ttk.Scale(
-    #         slider_frame,
-    #         from_=0, to=10,
-    #         orient='horizontal',
-    #         length=600,
-    #         command=lambda val: self.on_slider_changed(int(float(val)))
-    #     )
-    #     self.video_slider.pack(pady=(5, 5))
 
-    #     # Arrow Buttons centered below slider
-    #     button_row = tk.Frame(slider_frame)
-    #     button_row.pack()
 
-    #     left_button = tk.Button(button_row, text="←", width=4, command=lambda: self.video_slider.set(self.video_slider.get() - 1))
-    #     left_button.pack(side="left", padx=5)
 
-    #     right_button = tk.Button(button_row, text="→", width=4, command=lambda: self.video_slider.set(self.video_slider.get() + 1))
-    #     right_button.pack(side="left", padx=5)
 
-    #     # Optional
-    #     self.bottom_frame = bottom_frame
 
 
     def on_slider_changed(self, value):

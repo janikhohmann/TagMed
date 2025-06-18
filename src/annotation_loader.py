@@ -192,8 +192,10 @@ class AnnotationLoader():
                     "y": "NN",
                     "w": "NN",
                     "h": "NN",
+                    "polygons": "NN",
                     "exam_mode": "NN",
                     "organ": "NN",
+                    "annotation_type": "NN",
                     "file_type": file_type,
                     "new_path": os.path.join(root, file)
                 })
