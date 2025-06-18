@@ -19,45 +19,100 @@ class ImgAnnotationHandler:
         self.resize_handle_size = 3
 
         self.selected_annotation_index = None
-        #self.modify_mode = False
+
 
         self.dragging_handle = None
         self.dragging_rectangle = False
         self.last_mouse_pos = None
         self.drawn_rect_ids = []
 
+        # Polygon-specific attributes
+        self.polygon_points = []
+        self.polygon_point_ids = []
+        self.polygon_line_id = None
+        self.selected_point_index = None
+
+
         self.annotation_loader = AnnotationLoader()
 
+
+    # def add_annotation(self):
+    #     img_selected_class = self.gui.img_selected_class.get()
+    #     img_annotation_type = self.gui.img_annotation_type.get()
+
+    #     x, y, w, h = self.calculate_rectangle()
+    #     annotation_text = f"{img_selected_class.ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
+
+    #     self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
+    #     image_id = self.gui.selected_image_index.split(".")[0]
+
+    #     if 'img_ID' not in self.gui.all_annotations.columns:
+    #         print("[ERROR] 'img_ID' column not found in DataFrame.")
+    #         return
+        
+    #     # find row with image_id
+    #     match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
+    #     if not match.any():
+    #         print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
+    #         print(self.gui.all_annotations['img_ID'])
+    #         return
+    #     idx = self.gui.all_annotations[match].index[0]
+
+    #     # Initialize the list in the DataFrame cell
+    #     def append_or_init_list(cell, value):
+
+    #         if pd.isna(cell) or cell == "NN":
+    #             return [value]
+    
+    #         # Falls String wie "[123, 456]", dann versuche in Liste zu parsen
+    #         if isinstance(cell, str):
+    #             try:
+    #                 parsed = ast.literal_eval(cell)
+    #                 if isinstance(parsed, list):
+    #                     return parsed + [value]
+    #             except (ValueError, SyntaxError):
+    #                 pass
+    #             return [cell, value]
+
+    #         # Falls echte Liste
+    #         if isinstance(cell, list):
+    #             return cell + [value]
+
+    #         # Fallback für Einzelwerte (int, float, etc.)
+    #         return [cell, value]
+    
+    #     for col, val in zip(['x', 'y', 'w', 'h', 'class'], [x, y, w, h, img_selected_class]):
+    #         self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
+    #     print(self.gui.all_annotations["x"])
+
+        
+    #     print(f"[DEBUG] Add Annotation: new rect with rect_id {self.rect_id} was added to internal list.")
+
+    #     self.drawn_rect_ids.append(self.rect_id)
+    #     print(f"[DEBUG] Added rect_id {self.rect_id} to drawn_rect_ids. List size now: {len(self.drawn_rect_ids)}")
+        
+    #     self.update_image_listbox_with_annotation_colors() # does not work yet
 
     def add_annotation(self):
         img_selected_class = self.gui.img_selected_class.get()
         img_annotation_type = self.gui.img_annotation_type.get()
-
-        x, y, w, h = self.calculate_rectangle()
-        annotation_text = f"{img_selected_class.ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
-
-        self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
         image_id = self.gui.selected_image_index.split(".")[0]
 
         if 'img_ID' not in self.gui.all_annotations.columns:
             print("[ERROR] 'img_ID' column not found in DataFrame.")
             return
-        
-        # find row with image_id
+
+        # Finde Zeile zur aktuellen Image-ID
         match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
         if not match.any():
             print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
-            print(self.gui.all_annotations['img_ID'])
             return
         idx = self.gui.all_annotations[match].index[0]
 
-        # Initialize the list in the DataFrame cell
+        # Initialisiere Zellen wie vorher
         def append_or_init_list(cell, value):
-
             if pd.isna(cell) or cell == "NN":
                 return [value]
-    
-            # Falls String wie "[123, 456]", dann versuche in Liste zu parsen
             if isinstance(cell, str):
                 try:
                     parsed = ast.literal_eval(cell)
@@ -66,26 +121,51 @@ class ImgAnnotationHandler:
                 except (ValueError, SyntaxError):
                     pass
                 return [cell, value]
-
-            # Falls echte Liste
             if isinstance(cell, list):
                 return cell + [value]
-
-            # Fallback für Einzelwerte (int, float, etc.)
             return [cell, value]
-    
-        for col, val in zip(['x', 'y', 'w', 'h', 'class'], [x, y, w, h, img_selected_class]):
-            self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
-        print(self.gui.all_annotations["x"])
 
-        
-        print(f"[DEBUG] Add Annotation: new rect with rect_id {self.rect_id} was added to internal list.")
+        # === Bounding Box Annotation ===
+        if img_annotation_type == "Bounding Box":
+            x, y, w, h = self.calculate_rectangle()
+            annotation_text = f"{img_selected_class.ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
+            self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
 
-        self.drawn_rect_ids.append(self.rect_id)
-        print(f"[DEBUG] Added rect_id {self.rect_id} to drawn_rect_ids. List size now: {len(self.drawn_rect_ids)}")
-        
-        self.update_image_listbox_with_annotation_colors() # does not work yet
+            for col, val in zip(['x', 'y', 'w', 'h', 'class'], [x, y, w, h, img_selected_class]):
+                self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
 
+            self.drawn_rect_ids.append(self.rect_id)
+            print(f"[DEBUG] Added Bounding Box with rect_id {self.rect_id}")
+
+        # === Polygon Annotation ===
+        elif img_annotation_type == "Polygon":
+            if not hasattr(self, "polygon_points") or not self.polygon_points:
+                print("[ERROR] No polygon points available.")
+                return
+
+            annotation_text = f"{img_selected_class.ljust(12)} Polygon: {len(self.polygon_points)} Punkte"
+            self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
+
+            # Speichere Polygon in separater Spalte z.B. 'polygon'
+            if 'polygon' not in self.gui.all_annotations.columns:
+                self.gui.all_annotations['polygon'] = None  # Initialisiere Spalte, falls nicht vorhanden
+
+            polygon_copy = [point.copy() for point in self.polygon_points]
+            self.gui.all_annotations.at[idx, 'polygon'] = append_or_init_list(
+                self.gui.all_annotations.at[idx, 'polygon'], polygon_copy)
+            self.gui.all_annotations.at[idx, 'class_polygon'] = append_or_init_list(
+                self.gui.all_annotations.at[idx, 'class_polygon'], img_selected_class)
+
+            print(f"[DEBUG] Added Polygon with {len(self.polygon_points)} points")
+
+            # Leere die Punkte nach dem Einfügen (optional)
+            self.polygon_points.clear()
+
+        else:
+            print(f"[ERROR] Unbekannter Annotationstyp: {img_annotation_type}")
+            return
+
+        self.update_image_listbox_with_annotation_colors()
 
     def delete_annotation(self):
         selected = self.gui.img_annotation_listbox.curselection()
@@ -95,12 +175,10 @@ class ImgAnnotationHandler:
         index = selected[0]  # Position in der Listbox
         image_id = self.gui.selected_image_index.split(".")[0]
 
-        # Sicherstellen, dass 'img_ID' Spalte vorhanden ist
         if 'img_ID' not in self.gui.all_annotations.columns:
             print("[ERROR] 'img_ID' column not found in DataFrame.")
             return
 
-        # Passende Zeile zur Bild-ID finden
         match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
         if not match.any():
             print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
@@ -109,36 +187,46 @@ class ImgAnnotationHandler:
         idx = self.gui.all_annotations[match].index[0]
 
         try:
-            # Spaltennamen
-            cols = ['x', 'y', 'w', 'h', 'class']
+            row = self.gui.all_annotations.loc[idx]
 
-            for col in cols:
-                val = self.gui.all_annotations.at[idx, col]
-                # Versuche, val in Liste umzuwandeln, wenn nötig
-                if isinstance(val, str) and val.startswith('['):
-                    val = ast.literal_eval(val)
-                elif not isinstance(val, list):
-                    val = []
+            # Prüfe, ob Polygon-Spalte existiert und der Eintrag polygonbasiert ist
+            is_polygon = False
+            if 'polygon' in row:
+                polygons = self._safe_parse_list(row['polygon'])
+                if index < len(polygons):
+                    is_polygon = True
 
-                # Eintrag an 'index' entfernen, falls möglich
-                if len(val) > index:
-                    val.pop(index)
+            if is_polygon:
+                # Entferne Polygon-Daten
+                polygons = self._safe_parse_list(self.gui.all_annotations.at[idx, 'polygon'])
+                class_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'class_polygon'])
 
-                # Zurückschreiben
-                self.gui.all_annotations.at[idx, col] = val if val else "NN"
+                polygons.pop(index)
+                if index < len(class_list):
+                    class_list.pop(index)
 
-            # Rechteck entfernen
+                self.gui.all_annotations.at[idx, 'polygon'] = polygons if polygons else "NN"
+                self.gui.all_annotations.at[idx, 'class_polygon'] = class_list if class_list else "NN"
+            else:
+                # Entferne Bounding Box-Daten
+                for col in ['x', 'y', 'w', 'h', 'class']:
+                    val = self._safe_parse_list(self.gui.all_annotations.at[idx, col])
+                    if index < len(val):
+                        val.pop(index)
+                    self.gui.all_annotations.at[idx, col] = val if val else "NN"
+
+            # Entferne visuelles Element vom Canvas
             if index < len(self.drawn_rect_ids):
-                rect_id = self.drawn_rect_ids[index]
-                self.gui.image_canvas.delete(rect_id)
+                shape_id = self.drawn_rect_ids[index]
+                self.gui.image_canvas.delete(shape_id)
                 self.drawn_rect_ids.pop(index)
 
-            # Resize-Handles entfernen
+            # Resize-Handles löschen
             for handle in self.resize_handles:
                 self.gui.image_canvas.delete(handle)
             self.resize_handles.clear()
 
-            # Listbox-Eintrag entfernen
+            # Entferne Listbox-Eintrag
             self.gui.img_annotation_listbox.delete(index)
 
             self.update_image_listbox_with_annotation_colors()
@@ -151,7 +239,7 @@ class ImgAnnotationHandler:
 
 
     def load_annotations_for_image(self, image_id):
-        """Load all annotations (list-style) for the selected image."""
+        """Load all annotations (bounding boxes + polygons) for the selected image."""
         self.clear_all_annotations()
         print(f"[DEBUG] Handler: Loading annotations for image_id: '{image_id}'")
 
@@ -164,101 +252,189 @@ class ImgAnnotationHandler:
             print("[INFO] No annotations found for this image.")
             return
 
-        # rect_id-Spalte sicherstellen
         if 'rect_id' not in self.gui.all_annotations.columns:
             self.gui.all_annotations['rect_id'] = None
 
         idx = filtered_df.index[0]
         row = filtered_df.iloc[0]
 
-        # Hole Annotationen-Listen
-        x_list = ast.literal_eval(row['x']) if isinstance(row['x'], str) and row['x'].startswith('[') else row['x'] if isinstance(row['x'], list) else []
-        y_list = ast.literal_eval(row['y']) if isinstance(row['y'], str) and row['y'].startswith('[') else row['y'] if isinstance(row['y'], list) else []
-        w_list = ast.literal_eval(row['w']) if isinstance(row['w'], str) and row['w'].startswith('[') else row['w'] if isinstance(row['w'], list) else []
-        h_list = ast.literal_eval(row['h']) if isinstance(row['h'], str) and row['h'].startswith('[') else row['h'] if isinstance(row['h'], list) else []
-        class_list = ast.literal_eval(row['class']) if isinstance(row['class'], str) and row['x'].startswith('[') else row['class'] if isinstance(row['class'], list) else []
+        # --- Bounding Box Daten extrahieren ---
+        x_list = self._safe_parse_list(row.get('x'))
+        y_list = self._safe_parse_list(row.get('y'))
+        w_list = self._safe_parse_list(row.get('w'))
+        h_list = self._safe_parse_list(row.get('h'))
+        class_list = self._safe_parse_list(row.get('class'))
 
-        print(f"[DEBUG] x_list: {x_list}")
+        # --- Polygon Daten extrahieren ---
+        polygon_list = self._safe_parse_list(row.get('polygon')) if 'polygon' in row else []
+        polygon_class_list = self._safe_parse_list(row.get('class_polygon')) if 'class_polygon' in row else []
 
 
+        # --- Bounding Boxes zeichnen ---
         count = min(len(x_list), len(y_list), len(w_list), len(h_list), len(class_list))
-        rect_ids = []
-
         for i in range(count):
             try:
                 x, y, w, h = int(x_list[i]), int(y_list[i]), int(w_list[i]), int(h_list[i])
                 class_label = class_list[i]
 
                 if w <= 0 or h <= 0:
-                    print(f"[WARN] Skipping invalid annotation [{i}] (w or h <= 0)")
+                    print(f"[WARN] Skipping invalid bounding box [{i}] (w or h <= 0)")
                     continue
 
                 x1, y1 = x - w // 2, y - h // 2
                 x2, y2 = x + w // 2, y + h // 2
 
-                # Rechteck zeichnen
                 rect_id = self.gui.image_canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=2)
-                rect_ids.append(rect_id)
                 self.drawn_rect_ids.append(rect_id)
 
-                # Listbox-Eintrag
                 annotation_text = f"{str(class_label).ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
                 self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
 
-                print(f"[DEBUG] Drew rect_id {rect_id} for annotation {i}")
+                print(f"[DEBUG] Drew bounding box rect_id {rect_id} at [{x1}, {y1}, {x2}, {y2}]")
 
             except Exception as e:
-                print(f"[ERROR] Could not draw annotation {i}: {e}")
-                continue
+                print(f"[ERROR] Could not draw bounding box {i}: {e}")
+
+        # --- Polygone zeichnen ---
+        for j, polygon in enumerate(polygon_list):
+            try:
+                if not isinstance(polygon, list) or len(polygon) < 3:
+                    print(f"[WARN] Skipping invalid polygon [{j}]")
+                    continue
+
+                flat_points = [coord for point in polygon for coord in point]
+                polygon_id = self.gui.image_canvas.create_polygon(
+                    flat_points, outline="blue", fill="", width=2
+                )
+                self.drawn_rect_ids.append(polygon_id)
+
+                label = polygon_class_list[j] if j < len(polygon_class_list) else "unknown"
+                annotation_text = f"{label.ljust(12)} Polygon: {len(polygon)} Punkte"
+                self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
+
+                print(f"[DEBUG] Drew polygon with id {polygon_id}, {len(polygon)} points")
+
+            except Exception as e:
+                print(f"[ERROR] Could not draw polygon {j}: {e}")
+
+    def _safe_parse_list(self, value):
+        """Hilfsfunktion zum sicheren Parsen von Listen aus Strings oder Listen."""
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = ast.literal_eval(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception as e:
+                print(f"[ERROR] Parsing list failed: {e}")
+        return []
+
+
 
     def on_press(self, event):
         """
         Starts drawing or modifying a rectangle depending on mode.
         """
+        x, y = event.x, event.y # get mouse position
+        # get annotation type from GUI
+        annotation_mode = self.gui.img_annotation_type.get()
 
-        if not self.gui.modify_mode.get():
-            # Neuer Draw-Start
-            self.is_drawing = True
-            self.rect_start = (event.x, event.y)
-            self.rect_id = self.gui.image_canvas.create_rectangle(
-                event.x, event.y, event.x, event.y, outline="red", width=2)
-        else:
-            # Modify-Modus starten
-            self.dragging_handle = self.get_handle_at_position(event.x, event.y)
-            self.dragging_rectangle = self.is_inside_rectangle(event.x, event.y) and not self.dragging_handle
-            self.last_mouse_pos = (event.x, event.y)
+        if annotation_mode not in ["Bounding Box", "Polygon"]:
+            print("[ERROR] Invalid annotation type selected. Only 'Bounding Box' and 'Polygon' are supported.")
+            return
+
+        if annotation_mode == "Bounding Box":
+            if not self.gui.modify_mode.get():
+                # Neuer Draw-Start
+                self.is_drawing = True
+                self.rect_start = (x, y)
+                self.rect_id = self.gui.image_canvas.create_rectangle(
+                    x, y, x, y, outline="red", width=2)
+            else:
+                # Modify-Modus starten
+                self.dragging_handle = self.get_handle_at_position(x, y)
+                self.dragging_rectangle = self.is_inside_rectangle(x, y) and not self.dragging_handle
+                self.last_mouse_pos = (x, y)
+
+        if annotation_mode == "Polygon":
+                if not self.gui.modify_mode.get():
+                    self.polygon_points.append([x, y])
+                    point_id = self.gui.image_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red")
+                    self.polygon_point_ids.append(point_id)
+                    self.redraw_polygon()
+                else:
+                    # Check if a point is selected for modification
+                    for i, (px, py) in enumerate(self.polygon_points):
+                        if abs(event.x - px) < 6 and abs(event.y - py) < 6:
+                            self.selected_point_index = i
+                            return
+                    return  # no point selected, exit
+
+
 
     def on_drag(self, event):
         """
         Continues drawing or modifying the rectangle while the mouse is dragged.
         """
-        if not self.gui.modify_mode.get():
-            if self.is_drawing and self.rect_id:
-                self.gui.image_canvas.coords(
-                    self.rect_id,
-                    self.rect_start[0], self.rect_start[1],
-                    event.x, event.y
-                )
-        else:
-            if self.dragging_handle:
-                self.resize_rectangle(event.x, event.y, self.dragging_handle)
-            elif self.dragging_rectangle:
-                self.move_rectangle(event.x, event.y)
-            self.last_mouse_pos = (event.x, event.y)
+        x, y = event.x, event.y # get mouse position
+        # get annotation type from GUI
+        annotation_mode = self.gui.img_annotation_type.get()
+
+
+        if annotation_mode == "Bounding Box":
+            if not self.gui.modify_mode.get():
+                if self.is_drawing and self.rect_id:
+                    self.gui.image_canvas.coords(
+                        self.rect_id,
+                        self.rect_start[0], self.rect_start[1],
+                        x, y
+                    )
+            else:
+                if self.dragging_handle:
+                    self.resize_rectangle(x, y, self.dragging_handle)
+                elif self.dragging_rectangle:
+                    self.move_rectangle(x, y)
+                self.last_mouse_pos = (x, y)
+
+        if annotation_mode == "Polygon":
+            if not self.gui.modify_mode.get():
+                self.polygon_points.append([x, y])
+                point_id = self.gui.image_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red")
+                self.polygon_point_ids.append(point_id)
+                self.redraw_polygon()
+                
+            if self.gui.modify_mode.get() and self.selected_point_index is not None:
+                self.polygon_points[self.selected_point_index] = [x, y]
+
+                # Update Punktkreis auf Canvas
+                point_id = self.polygon_point_ids[self.selected_point_index]
+                self.gui.image_canvas.coords(point_id, x-4, y-4, x+4, y+4)
+
+                self.redraw_polygon()
+                
 
 
     def on_release(self, event):
         """
         Finishes drawing or modifying. Automatically updates the annotation.
         """
-        if not self.gui.modify_mode.get():
-            if self.is_drawing:
-                self.rect_end = (event.x, event.y)
-                self.is_drawing = False
-        else:
-            self.dragging_handle = None
-            self.dragging_rectangle = False
-            self.last_mouse_pos = None
+        x, y = event.x, event.y # get mouse position
+        # get annotation type from GUI
+        annotation_mode = self.gui.img_annotation_type.get()
+
+        if annotation_mode == "Bounding Box":
+            if not self.gui.modify_mode.get():
+                if self.is_drawing:
+                    self.rect_end = (x, y)
+                    self.is_drawing = False
+            else:
+                self.dragging_handle = None
+                self.dragging_rectangle = False
+                self.last_mouse_pos = None
+
+        if annotation_mode == "Polygon":
+            self.selected_point_index = None
 
 
     def calculate_rectangle(self):
@@ -649,3 +825,19 @@ class ImgAnnotationHandler:
                 self.gui.image_listbox.itemconfig(index, {'bg': '#d4fcd4'})  # grün
             else:
                 self.gui.image_listbox.itemconfig(index, {'bg': '#fcd4d4'})  # rot
+
+
+    def redraw_polygon(self):
+        if self.polygon_line_id:
+            self.gui.image_canvas.delete(self.polygon_line_id)
+
+        if len(self.polygon_points) >= 2:
+            # Optional: geschlossener Pfad
+            points_flat = [coord for point in self.polygon_points for coord in point]
+            self.polygon_line_id = self.gui.image_canvas.create_polygon(
+                points_flat,
+                outline="blue",
+                fill="lightblue",
+                stipple="gray25",
+                width=2
+            )
