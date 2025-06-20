@@ -102,15 +102,16 @@ class ImgAnnotationHandler:
             print("[ERROR] 'img_ID' column not found in DataFrame.")
             return
 
-        # Finde Zeile zur aktuellen Image-ID
+        # Searchfor row with Image-ID
         match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
         if not match.any():
             print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
             return
-        idx = self.gui.all_annotations[match].index[0]
+        idx = self.gui.all_annotations[match].index[0] # return index of row in dataframe
 
-        # Initialisiere Zellen wie vorher
+        # initialize cells 
         def append_or_init_list(cell, value):
+            """ HelperFunction: Appends a value to a list in a DataFrame cell or initializes it if empty."""
             if pd.isna(cell) or cell == "NN":
                 return [value]
             if isinstance(cell, str):
@@ -143,12 +144,12 @@ class ImgAnnotationHandler:
                 print("[ERROR] No polygon points available.")
                 return
 
-            annotation_text = f"{img_selected_class.ljust(12)} Polygon: {len(self.polygon_points)} Punkte"
+            annotation_text = f"{img_selected_class.ljust(12)} Polygon: {len(self.polygon_points)} points"
             self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
 
-            # Speichere Polygon in separater Spalte z.B. 'polygon'
+            # save polygon points in DataFrame
             if 'polygon' not in self.gui.all_annotations.columns:
-                self.gui.all_annotations['polygon'] = None  # Initialisiere Spalte, falls nicht vorhanden
+                self.gui.all_annotations['polygon'] = None  # initalize column if not exists
 
             polygon_copy = [point.copy() for point in self.polygon_points]
             self.gui.all_annotations.at[idx, 'polygon'] = append_or_init_list(
@@ -158,11 +159,11 @@ class ImgAnnotationHandler:
 
             print(f"[DEBUG] Added Polygon with {len(self.polygon_points)} points")
 
-            # Leere die Punkte nach dem Einfügen (optional)
+            # clean list after adding to dataframe
             self.polygon_points.clear()
 
         else:
-            print(f"[ERROR] Unbekannter Annotationstyp: {img_annotation_type}")
+            print(f"[ERROR] Unknown annotation type:: {img_annotation_type}")
             return
 
         self.update_image_listbox_with_annotation_colors()
@@ -781,8 +782,8 @@ class ImgAnnotationHandler:
 
     def update_image_listbox_with_annotation_colors(self):
         """
-        Aktualisiert die Image-Listbox mit Hintergrundfarben abhängig vom Annotationsstatus.
-        Grün = annotiert (class ≠ NN oder leer), Rot = nicht annotiert.
+        Updates the image listbox with background colors depending on the annotation status.
+        Green = annotated (class ≠ NN or empty), red = not annotated.
         """
         self.gui.image_listbox.delete(0, tk.END)
 
@@ -797,25 +798,31 @@ class ImgAnnotationHandler:
             if i.lower().endswith(('.png', '.jpg', '.jpeg')) and "frame" not in i.lower()
         ]
 
-        # Lade Annotationen aus CSV oder gespeicherter Quelle
+        # load annotations from csv
         annotated_df = self.annotation_loader.load_annotations_from_annotable()
 
-        # Sicherheitsprüfung: Falls img_ID oder class nicht vorhanden
-        if 'img_ID' not in annotated_df.columns or 'class' not in annotated_df.columns:
-            print("[ERROR] Annotation DataFrame fehlt notwendige Spalten ('img_ID' oder 'class').")
+        # make sure the DataFrame has the necessary columns
+        needed_columns = ['img_ID' , 'class', 'x', 'y', 'w', 'h', 'polygon', 'class_polygon']
+        missing_columns = [col for col in needed_columns if col not in annotated_df.columns]
+        if missing_columns:
+            print(f"[ERROR] Annotation DataFrame is missing necessary columns: {missing_columns}")
             return
 
-        # Normiere leere oder NN-Klassen
-        annotated_df['class'] = annotated_df['class'].apply(
-            lambda x: "NN" if pd.isna(x) or x == [] else x
-        )
+        # set default values for 'class' and 'class_polygon'
+        for col in ['class', 'class_polygon']:
+            annotated_df[col] = annotated_df[col].apply(
+                lambda x: "NN" if pd.isna(x) or x == [] else x
+            )
 
-        # Finde alle Bilder mit gültiger Annotation
+        # find all annotated image IDs (where class or class_polygon is not "NN")
         annotated_image_ids = set(
-            annotated_df.loc[annotated_df['class'] != "NN", 'img_ID'].astype(str).str.strip()
+            annotated_df.loc[
+                (annotated_df['class'] != "NN") | (annotated_df['class_polygon'] != "NN"),
+                'img_ID'
+            ].astype(str).str.strip()
         )
 
-        # Listbox befüllen + einfärben
+        # fill listbox with images and color them based on annotations
         for image in images:
             image_id = image.split(".")[0].strip()
             self.gui.image_listbox.insert(tk.END, image)

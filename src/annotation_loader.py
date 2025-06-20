@@ -50,7 +50,10 @@ class AnnotationLoader():
         try : 
             anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
             filtered = anno_table[
-                (anno_table["pat_ID"] == patient_id) & (anno_table["x"] != "NN")
+                (anno_table["pat_ID"] == patient_id) &
+                (
+                    (anno_table["class"] != "NN") | (anno_table["class_polygon"] != "NN")
+                )
             ]
         except FileNotFoundError:
             print(f"[ERROR] Annotation table file not found: {self.selected_anno_table_file}")
