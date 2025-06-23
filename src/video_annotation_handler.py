@@ -7,7 +7,6 @@ from PIL import Image, ImageTk
 import statistics as stat
 import numpy as np
 
-from config_handler import ConfigHandler
 from annotation_loader import AnnotationLoader
 
 
@@ -28,237 +27,407 @@ class VideoAnnotationHandler():
         self.dragging_rectangle = False
         self.last_mouse_pos = None
         self.rect_ids = []
+
+        # Polygon-specific attributes
+        self.polygon_points = []
+        self.polygon_point_ids = []
+        self.polygon_line_id = None
+        self.selected_point_index = None
+        self.listbox_index = None
+        self.polygon_index = None
+        self.is_drawing_polygon = False
+
         self.drawn_rect_ids = []
         self.drawn_mask_ids = []
 
         self.annotation_loader = AnnotationLoader()
 
-
     def add_annotation(self):
         img_selected_class = self.gui.video_selected_class.get()
         img_annotation_type = self.gui.video_annotation_type.get()
-
-        x, y, w, h = self.calculate_rectangle()
-        annotation_text = f"{img_selected_class.ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
-
-        self.gui.video_annotation_listbox.insert(tk.END, annotation_text)
+        image_id = self.current_image_id 
 
         if 'img_ID' not in self.gui.all_annotations.columns:
             print("[ERROR] 'img_ID' column not found in DataFrame.")
             return
-        
-        # find row with image_id
-        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(self.gui.current_frame_id)
+
+        # Search for row with Image-ID
+        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
         if not match.any():
-            print(f"[ERROR] No entry found in annotation_df for img_ID '{self.gui.current_frame_id}'")
-            print(self.gui.all_annotations['img_ID'])
+            print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
             return
-        idx = self.gui.all_annotations[match].index[0]
+        idx = self.gui.all_annotations[match].index[0] # return index of row in dataframe
 
-        # Initialize the list in the DataFrame cell
+        # initialize cells 
         def append_or_init_list(cell, value):
-
-            if pd.isna(cell) or cell == "NN":
+            """ HelperFunction: Appends a value to a list in a DataFrame cell or initializes it if empty."""
+            if isinstance(cell, float) and pd.isna(cell):
                 return [value]
-    
-            # Falls String wie "[123, 456]", dann versuche in Liste zu parsen
-            if isinstance(cell, str):
-                try:
-                    parsed = ast.literal_eval(cell)
-                    if isinstance(parsed, list):
-                        return parsed + [value]
-                except (ValueError, SyntaxError):
-                    pass
-                return [cell, value]
-
-            # Falls echte Liste
+            if isinstance(cell, str) and cell == "NN":
+                return [value]
             if isinstance(cell, list):
                 return cell + [value]
+            try:
+                parsed = ast.literal_eval(cell)
+                if isinstance(parsed, list):
+                    return parsed + [value]
+            except:
+                pass
+            return [value]
 
-            # Fallback für Einzelwerte (int, float, etc.)
-            return [cell, value]
-    
-        for col, val in zip(['x', 'y', 'w', 'h', 'class'], [x, y, w, h, img_selected_class]):
-            self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
 
-        
-        print(f"[DEBUG] Add Annotation: new rect with rect_id {self.rect_id} was added to internal list.")
+        # === Bounding Box Annotation ===
+        if img_annotation_type == "Bounding Box":
+            x, y, w, h = self.calculate_rectangle()
+            annotation_text = f"{img_selected_class.ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
+            self.gui.video_annotation_listbox.insert(tk.END, annotation_text)
 
-        self.drawn_rect_ids.append(self.rect_id)
-        print(f"[DEBUG] Added rect_id {self.rect_id} to drawn_rect_ids. List size now: {len(self.drawn_rect_ids)}")
-        
-        self.update_video_listbox_with_annotation_colors() # does not work yet
+            for col, val in zip(['x', 'y', 'w', 'h', 'class'], [x, y, w, h, img_selected_class]):
+                self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
+
+            self.drawn_rect_ids.append(self.rect_id)
+            print(f"[DEBUG] Added Bounding Box with rect_id {self.rect_id}")
+
+        # === Polygon Annotation ===
+        elif img_annotation_type == "Polygon":
+            if not hasattr(self, "polygon_points") or not self.polygon_points:
+                print("[ERROR] No polygon points available.")
+                return
+
+            annotation_text = f"{img_selected_class.ljust(12)} Polygon: {len(self.polygon_points)} points"
+            self.gui.video_annotation_listbox.insert(tk.END, annotation_text)
+
+            # save polygon points in DataFrame
+            if 'polygon' not in self.gui.all_annotations.columns:
+                self.gui.all_annotations['polygon'] = None  # initalize column if not exists
+
+            polygon_copy = [point.copy() for point in self.polygon_points]
+            self.gui.all_annotations.at[idx, 'polygon'] = append_or_init_list(
+                self.gui.all_annotations.at[idx, 'polygon'], polygon_copy)
+            self.gui.all_annotations.at[idx, 'class_polygon'] = append_or_init_list(
+                self.gui.all_annotations.at[idx, 'class_polygon'], img_selected_class)
+
+            print(f"[DEBUG] Added Polygon with {len(self.polygon_points)} points")
+
+            # clean list after adding to dataframe
+            self.polygon_points.clear()
+
+        else:
+            print(f"[ERROR] Unknown annotation type:: {img_annotation_type}")
+            return
+
+        self.update_video_listbox_with_annotation_colors()
 
 
     def delete_annotation(self):
-
         selected = self.gui.video_annotation_listbox.curselection()
         if not selected:
             return
 
         index = selected[0]  # Position in der Listbox
+        image_id = self.current_image_id 
 
-        # Sicherstellen, dass 'img_ID' Spalte vorhanden ist
         if 'img_ID' not in self.gui.all_annotations.columns:
             print("[ERROR] 'img_ID' column not found in DataFrame.")
             return
 
-        # Passende Zeile zur Bild-ID finden
-        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(self.gui.current_frame_id).strip()
+        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
         if not match.any():
-            print(f"[ERROR] No entry found in annotation_df for img_ID '{self.gui.current_frame_id}'")
+            print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
             return
 
         idx = self.gui.all_annotations[match].index[0]
 
         try:
-            # Spaltennamen
-            cols = ['x', 'y', 'w', 'h', 'class']
+            row = self.gui.all_annotations.loc[idx]
 
-            for col in cols:
-                val = self.gui.all_annotations.at[idx, col]
-                # Versuche, val in Liste umzuwandeln, wenn nötig
-                if isinstance(val, str) and val.startswith('['):
-                    val = ast.literal_eval(val)
-                elif not isinstance(val, list):
-                    val = []
+            # Prüfe, ob Polygon-Spalte existiert und der Eintrag polygonbasiert ist
+            is_polygon = False
+            if 'polygon' in row:
+                polygons = self._safe_parse_list(row['polygon'])
+                if index < len(polygons):
+                    is_polygon = True
 
-                # Eintrag an 'index' entfernen, falls möglich
-                if len(val) > index:
-                    val.pop(index)
+            if is_polygon:
+                # Entferne Polygon-Daten
+                polygons = self._safe_parse_list(self.gui.all_annotations.at[idx, 'polygon'])
+                class_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'class_polygon'])
 
-                # Zurückschreiben
-                self.gui.all_annotations.at[idx, col] = val if val else "NN"
+                polygons.pop(index)
+                if index < len(class_list):
+                    class_list.pop(index)
 
-            # Rechteck entfernen
+                self.gui.all_annotations.at[idx, 'polygon'] = polygons if polygons else "NN"
+                self.gui.all_annotations.at[idx, 'class_polygon'] = class_list if class_list else "NN"
+            else:
+                # Entferne Bounding Box-Daten
+                for col in ['x', 'y', 'w', 'h', 'class']:
+                    val = self._safe_parse_list(self.gui.all_annotations.at[idx, col])
+                    if index < len(val):
+                        val.pop(index)
+                    self.gui.all_annotations.at[idx, col] = val if val else "NN"
+
+            # Entferne visuelles Element vom Canvas
             if index < len(self.drawn_rect_ids):
-                rect_id = self.drawn_rect_ids[index]
-                self.gui.frame_canvas.delete(rect_id)
+                shape_id = self.drawn_rect_ids[index]
+                self.gui.frame_canvas.delete(shape_id)
                 self.drawn_rect_ids.pop(index)
 
-            # Resize-Handles entfernen
+            # Resize-Handles löschen
             for handle in self.resize_handles:
                 self.gui.frame_canvas.delete(handle)
             self.resize_handles.clear()
 
-            # Listbox-Eintrag entfernen
+            # Entferne Listbox-Eintrag
             self.gui.video_annotation_listbox.delete(index)
 
             self.update_video_listbox_with_annotation_colors()
-            print(f"[DEBUG] Deleted annotation at index {index} from image {self.gui.current_frame_id}.")
+            print(f"[DEBUG] Deleted annotation at index {index} from image {image_id}.")
 
         except Exception as e:
             print(f"[ERROR] Failed to delete annotation: {e}")
 
 
+
     def load_annotations_for_frame(self):
         """Load all annotations (list-style) for the selected frame."""
         self.clear_all_annotations()
-        #print(f"[DEBUG] Handler: Loading annotations for image_id: '{self.gui.current_frame_id}'")
+
+        current_image_id = self.gui.current_frames[self.gui.current_frame_index].split(".")[0]
+        self.current_image_id = current_image_id
+
+        print(f"[DEBUG] Handler: Loading annotations for image_id: '{self.current_image_id }'")
 
         df = self.gui.all_annotations
 
         # Filter nach Bild-ID
-        filtered_df = df[df['img_ID'].astype(str).str.strip() == str(self.gui.current_frame_id).strip()]
+        filtered_df = df[df['img_ID'].astype(str).str.strip() == str(self.current_image_id ).strip()]
 
         if filtered_df.empty:
             print("[INFO] No annotations found for this image.")
             return
 
-        # rect_id-Spalte sicherstellen
         if 'rect_id' not in self.gui.all_annotations.columns:
             self.gui.all_annotations['rect_id'] = None
 
         idx = filtered_df.index[0]
         row = filtered_df.iloc[0]
 
-        # Hole Annotationen-Listen
-        x_list = ast.literal_eval(row['x']) if isinstance(row['x'], str) and row['x'].startswith('[') else row['x'] if isinstance(row['x'], list) else []
-        y_list = ast.literal_eval(row['y']) if isinstance(row['y'], str) and row['y'].startswith('[') else row['y'] if isinstance(row['y'], list) else []
-        w_list = ast.literal_eval(row['w']) if isinstance(row['w'], str) and row['w'].startswith('[') else row['w'] if isinstance(row['w'], list) else []
-        h_list = ast.literal_eval(row['h']) if isinstance(row['h'], str) and row['h'].startswith('[') else row['h'] if isinstance(row['h'], list) else []
-        class_list = ast.literal_eval(row['class']) if isinstance(row['class'], str) and row['x'].startswith('[') else row['class'] if isinstance(row['class'], list) else []
+        # --- Bounding Box Daten extrahieren ---
+        x_list = self._safe_parse_list(row.get('x'))
+        y_list = self._safe_parse_list(row.get('y'))
+        w_list = self._safe_parse_list(row.get('w'))
+        h_list = self._safe_parse_list(row.get('h'))
+        class_list = self._safe_parse_list(row.get('class'))
+
+        # --- Polygon Daten extrahieren ---
+        polygon_list = self._safe_parse_list(row.get('polygon')) if 'polygon' in row else []
+        polygon_class_list = self._safe_parse_list(row.get('class_polygon')) if 'class_polygon' in row else []
 
 
-
+        # --- Bounding Boxes zeichnen ---
         count = min(len(x_list), len(y_list), len(w_list), len(h_list), len(class_list))
-
         for i in range(count):
             try:
                 x, y, w, h = int(x_list[i]), int(y_list[i]), int(w_list[i]), int(h_list[i])
                 class_label = class_list[i]
 
                 if w <= 0 or h <= 0:
-                    print(f"[WARN] Skipping invalid annotation [{i}] (w or h <= 0)")
+                    print(f"[WARN] Skipping invalid bounding box [{i}] (w or h <= 0)")
                     continue
 
                 x1, y1 = x - w // 2, y - h // 2
                 x2, y2 = x + w // 2, y + h // 2
 
-                # Rechteck zeichnen
                 rect_id = self.gui.frame_canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=2)
-                self.rect_ids.append(rect_id)
                 self.drawn_rect_ids.append(rect_id)
 
-                # Listbox-Eintrag
                 annotation_text = f"{str(class_label).ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
                 self.gui.video_annotation_listbox.insert(tk.END, annotation_text)
 
-                #print(f"[DEBUG] Drew rect_id {rect_id} for annotation {i}")
+                print(f"[DEBUG] Drew bounding box rect_id {rect_id} at [{x1}, {y1}, {x2}, {y2}]")
 
             except Exception as e:
-                print(f"[ERROR] Could not draw annotation {i}: {e}")
-                continue
+                print(f"[ERROR] Could not draw bounding box {i}: {e}")
 
+        # --- Polygone zeichnen ---
+        for j, polygon in enumerate(polygon_list):
+            try:
+                if not isinstance(polygon, list) or len(polygon) < 3:
+                    print(f"[WARN] Skipping invalid polygon [{j}]")
+                    continue
+
+                flat_points = [coord for point in polygon for coord in point]
+                polygon_id = self.gui.frame_canvas.create_polygon(
+                    flat_points, outline="blue", fill="", width=2, tags=f"polygon_{j}"
+                )
+
+                self.drawn_rect_ids.append(polygon_id)
+
+                label = polygon_class_list[j] if j < len(polygon_class_list) else "unknown"
+                annotation_text = f"{label.ljust(12)} Polygon: {len(polygon)} Punkte"
+                self.gui.video_annotation_listbox.insert(tk.END, annotation_text)
+
+                print(f"[DEBUG] Drew polygon with id {polygon_id}, {len(polygon)} points")
+
+            except Exception as e:
+                print(f"[ERROR] Could not draw polygon {j}: {e}")
+
+
+
+    def _safe_parse_list(self, value):
+        """Hilfsfunktion zum sicheren Parsen von Listen aus Strings oder Listen."""
+        if isinstance(value, list):
+            return value
+        if pd.isna(value) or value in ("NN", "", None):
+            return []
+        if isinstance(value, str):
+            try:
+                parsed = ast.literal_eval(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception as e:
+                print(f"[ERROR] Parsing list failed: {e} | value = {repr(value)}")
+        return []
+    
     def on_press(self, event):
         """
-        Starts drawing or modifying a rectangle depending on mode.
+        Starts drawing or modifying a rectangle or polygon depending on mode.
         """
+        x, y = event.x, event.y # get mouse position
+        # get annotation type from GUI
+        annotation_mode = self.gui.video_annotation_type.get()
 
+        if annotation_mode not in ["Bounding Box", "Polygon"]:
+            print("[ERROR] Invalid annotation type selected. Only 'Bounding Box' and 'Polygon' are supported.")
+            return
+        
+
+
+        # ==== draw mode ====   
         if not self.gui.modify_mode.get():
-            # Neuer Draw-Start
-            self.is_drawing = True
-            self.rect_start = (event.x, event.y)
-            self.rect_id = self.gui.frame_canvas.create_rectangle(
-                event.x, event.y, event.x, event.y, outline="red", width=2)
-        else:
-            # Modify-Modus starten
-            self.dragging_handle = self.get_handle_at_position(event.x, event.y)
-            self.dragging_rectangle = self.is_inside_rectangle(event.x, event.y) and not self.dragging_handle
-            self.last_mouse_pos = (event.x, event.y)
+            if annotation_mode == "Bounding Box":
+                # draw new rectangle
+                self.is_drawing = True
+                self.rect_start = (x, y)
+                self.rect_id = self.gui.frame_canvas.create_rectangle(
+                    x, y, x, y, outline="red", width=2)
+            else:
+                #if self.polygon_index is None:
+                    # get correct polygon index from listbox
+                polygon_index = 0
+                for i in range(self.gui.video_annotation_listbox.size()):
+                    entry = self.gui.video_annotation_listbox.get(i)
+                    if "Polygon" in entry:
+                        polygon_index += 1
+                self.polygon_index = polygon_index
 
+                self.polygon_points.append([x, y])
+                point_id = self.gui.frame_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red")
+                self.polygon_point_ids.append(point_id)
+                self.redraw_polygon()
+        
+        # Entscheide, ob es sich um Bounding Box oder Polygon handelt
+        try:
+            selected_text = self.gui.video_annotation_listbox.get(self.listbox_index)
+            is_polygon = "Polygon" in selected_text
+        except: 
+            return
+        
+        # ==== annotation mode ====
+        if self.gui.modify_mode.get(): 
+            if not is_polygon:
+                # start modify mode for rectangle
+                self.dragging_handle = self.get_handle_at_position(x, y)
+                self.dragging_rectangle = self.is_inside_rectangle(x, y) and not self.dragging_handle
+                self.last_mouse_pos = (x, y)
+            else:
+                # Check if a point is selected for modification
+                self.selected_point_index = None
+                for i, (px, py) in enumerate(self.polygon_points):
+                    if abs(event.x - px) < 6 and abs(event.y - py) < 6:
+                        self.selected_point_index = i
+                        return
 
     def on_drag(self, event):
         """
         Continues drawing or modifying the rectangle while the mouse is dragged.
         """
-        if not self.gui.modify_mode.get():
-            if self.is_drawing and self.rect_id:
-                self.gui.frame_canvas.coords(
-                    self.rect_id,
-                    self.rect_start[0], self.rect_start[1],
-                    event.x, event.y
-                )
-        else:
-            if self.dragging_handle:
-                self.resize_rectangle(event.x, event.y, self.dragging_handle)
-            elif self.dragging_rectangle:
-                self.move_rectangle(event.x, event.y)
-            self.last_mouse_pos = (event.x, event.y)
+        x, y = event.x, event.y # get mouse position
+        # get annotation type from GUI
+        annotation_mode = self.gui.video_annotation_type.get()
 
+
+        # ==== draw mode ====
+        if not self.gui.modify_mode.get():
+            if annotation_mode == "Bounding Box":
+                if self.is_drawing and self.rect_id:
+                    self.gui.frame_canvas.coords(
+                        self.rect_id,
+                        self.rect_start[0], self.rect_start[1],
+                        x, y
+                    )
+            else: 
+                self.polygon_points.append([x, y])
+                point_id = self.gui.frame_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red")
+                self.polygon_point_ids.append(point_id)
+                self.redraw_polygon()
+
+
+
+        # Entscheide, ob es sich um Bounding Box oder Polygon handelt
+        try:
+            selected_text = self.gui.video_annotation_listbox.get(self.listbox_index)
+            is_polygon = "Polygon" in selected_text
+        except: 
+            return
+        
+        print(f"[DEBUG] Updating polygon point at index {self.selected_point_index}")
+        print(self.gui.modify_mode.get())
+        print(is_polygon)
+        # ==== modify mode ====
+        if self.gui.modify_mode.get():
+            if not is_polygon:
+                if self.dragging_handle:
+                    self.resize_rectangle(x, y, self.dragging_handle)
+                elif self.dragging_rectangle:
+                    self.move_rectangle(x, y)
+                self.last_mouse_pos = (x, y)
+            else:
+                print("hier")
+                if self.selected_point_index is not None:
+                    self.polygon_points[self.selected_point_index] = [x, y]
+
+                    # Update Punktkreis auf Canvas
+                    print(f"[DEBUG] Updating polygon point at index {self.selected_point_index} to ({x}, {y})")
+                    point_id = self.polygon_point_ids[self.selected_point_index]
+                    print(point_id)
+                    self.gui.frame_canvas.coords(point_id, x-4, y-4, x+4, y+4)
+
+                    self.redraw_polygon()
+                
 
     def on_release(self, event):
         """
         Finishes drawing or modifying. Automatically updates the annotation.
         """
-        if not self.gui.modify_mode.get():
-            if self.is_drawing:
-                self.rect_end = (event.x, event.y)
-                self.is_drawing = False
-        else:
-            self.dragging_handle = None
-            self.dragging_rectangle = False
-            self.last_mouse_pos = None
+        x, y = event.x, event.y # get mouse position
+        # get annotation type from GUI
+        annotation_mode = self.gui.video_annotation_type.get()
+
+        if annotation_mode == "Bounding Box":
+            if not self.gui.modify_mode.get():
+                if self.is_drawing:
+                    self.rect_end = (x, y)
+                    self.is_drawing = False
+            else:
+                self.dragging_handle = None
+                self.dragging_rectangle = False
+                self.last_mouse_pos = None
+
+        if annotation_mode == "Polygon":
+            self.selected_point_index = None
+
 
 
     def calculate_rectangle(self):
@@ -279,22 +448,24 @@ class VideoAnnotationHandler():
         canvas_height = abs(y2 - y1)
 
         return canvas_x, canvas_y, canvas_width, canvas_height
-    
+
 
     def on_annotation_selected(self, event):
         """
         Triggered when a listbox annotation is selected. Clears handles.
         """
 
-        #self.remove_resize_handles()
+        self.remove_resize_handles()
+        self.gui.modify_mode.set(False)
+
         selection = self.gui.video_annotation_listbox.curselection()
         if not selection:
             return
         listbox_index = selection[0]
-        
-        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == self.gui.current_frame_id
+
+        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == self.current_image_id 
         if not match.any():
-            print(f"[ERROR] No row found for img_ID = {self.gui.current_frame_id}")
+            print(f"[ERROR] No row found for img_ID = {self.current_image_id }")
             return
         df_index = self.gui.all_annotations[match].index[0]
 
@@ -303,87 +474,150 @@ class VideoAnnotationHandler():
         self.row = self.gui.all_annotations.loc[df_index]
         self.listbox_index = listbox_index
 
+        # get correct polygon index from listbox
+        polygon_index = -1
+        for i in range(listbox_index + 1):
+            entry = self.gui.video_annotation_listbox.get(i)
+            if "Polygon" in entry:
+                polygon_index += 1
+        self.polygon_index = polygon_index
+
+
+
     def clear_all_annotations(self):
-        """Clear all rectangles and the listbox, including rect_id entries in the DataFrame."""
-        # Entferne alle Rechtecke vom Canvas
+        """Clear all rectangles, polygons from canvas and the listbox, including rect_id entries in the DataFrame."""
 
-        # print("[DEBUG] Clearing all annotations from canvas and listbox.")
-        # print(self.drawn_rect_ids)
-
+        # ==== Delte all rectangles from canvas ====
         for rect_id in self.drawn_rect_ids:
             self.gui.frame_canvas.delete(rect_id)
         self.drawn_rect_ids.clear()
 
-        self.gui.video_annotation_listbox.delete(0, tk.END)
+        # Entferne alle rect_id Einträge aus dem DataFrame für das aktuelle Bild - can this be deleted?
+        current_image = self.gui.current_frame_index
+        mask = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(current_image).strip()
+        if 'rect_id' in self.gui.all_annotations.columns:
+            self.gui.all_annotations.loc[mask, 'rect_id'] = None
 
+        # remove resize handles
         self.remove_resize_handles()
+
+        # === Delete all polygons from canvas ===
+        # delete lines
+        if hasattr(self, 'polygon_line_id') and self.polygon_line_id is not None:
+            self.gui.frame_canvas.delete(self.polygon_line_id)
+            self.polygon_line_id = None
+
+        # delete points
+        for pid in getattr(self, 'polygon_point_ids', []):
+            self.gui.frame_canvas.delete(pid)
+        self.polygon_point_ids = []
+        self.polygon_points = []
+
+        # empty listbox 
+        self.gui.video_annotation_listbox.delete(0, tk.END)
+        
+        # set internal state back to initial
+        self.selected_point_index = None
+        self.rect_id = None
+        self.listbox_index = None
 
 
     def modify_annotation(self):
-
+        """Modifies selected annotation, handling both bounding boxes and polygons."""
         if not self.gui.modify_mode.get():
             self.remove_resize_handles()
             self.update_annotation_in_listbox()
+            for pid in getattr(self, 'polygon_point_ids', []):
+                self.gui.frame_canvas.delete(pid)
+                self.polygon_point_ids = []
+                self.polygon_points = []
             return
+    
+
 
         selection = self.gui.video_annotation_listbox.curselection()
         if not selection:
             print("Modify Error: No annotation selected in the listbox.")
             return
 
-        # Filter die richtige Zeile (ein Bild = eine Zeile in df)
-        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == self.gui.current_frame_id
+        listbox_index = selection[0]
+        self.listbox_index = listbox_index
+
+        # Finde die passende Zeile im DataFrame
+        match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == self.current_image_id 
         if not match.any():
-            print(f"[ERROR] No row found for img_ID = {self.gui.current_frame_id}")
+            print(f"[ERROR] No row found for img_ID = {self.current_image_id }")
             return
 
         df_index = self.gui.all_annotations[match].index[0]
-
         row = self.gui.all_annotations.loc[df_index]
-        self.row = row
-        
-        x_list = ast.literal_eval(row['x']) if isinstance(row['x'], str) and row['x'].startswith('[') else row['x'] if isinstance(row['x'], list) else []
-        y_list = ast.literal_eval(row['y']) if isinstance(row['y'], str) and row['y'].startswith('[') else row['y'] if isinstance(row['y'], list) else []
-        w_list = ast.literal_eval(row['w']) if isinstance(row['w'], str) and row['w'].startswith('[') else row['w'] if isinstance(row['w'], list) else []
-        h_list = ast.literal_eval(row['h']) if isinstance(row['h'], str) and row['h'].startswith('[') else row['h'] if isinstance(row['h'], list) else []
-        class_list = ast.literal_eval(row['class']) if isinstance(row['class'], str) and row['x'].startswith('[') else row['class'] if isinstance(row['class'], list) else []
+        self.row = row  # Zur späteren Nutzung speichern
+        self.selected_annotation_original_index = df_index
 
-        try:
-            # Zugriff auf die Annotation an der Stelle des Listbox-Eintrags
-            x = x_list[self.listbox_index]
-            y = y_list[self.listbox_index]
-            w = w_list[self.listbox_index]
-            h = h_list[self.listbox_index]
-        except IndexError:
-            print(f"[ERROR] Annotation index {self.listbox_index} out of range in DataFrame lists.")
-            return
+        # Entscheide, ob es sich um Bounding Box oder Polygon handelt
+        selected_text = self.gui.video_annotation_listbox.get(listbox_index)
+        is_polygon = "Polygon" in selected_text
 
-        # print(f"[DEBUG] rect_id: {self.rect_id}, x: {x}, y: {y}, w: {w}, h: {h}")
-        # print(self.drawn_rect_ids)
-        # Canvas-Element finden: du brauchst dafür einen rect_id-Cache pro Annotation (z.B. in extra Liste speichern)
-        try:
-            self.rect_id = self.drawn_rect_ids[self.listbox_index]
-        except IndexError:
-            print(f"[ERROR] rect_id index {self.listbox_index} out of range.")
-            return
+        if is_polygon:
+            # ----- POLYGON-ANNOTATION BEARBEITEN -----
+
+            # Alte Handles, Punkte und Polygon-Linie löschen
+            self.remove_resize_handles()  # Entfernt ggf. alte Bounding Box Handles
+
+            if hasattr(self, 'polygon_index') and self.polygon_index is not None:
+                tag_to_delete = f"polygon_{self.polygon_index}"
+                self.gui.frame_canvas.delete(tag_to_delete)
 
 
-        try:
-            
-            coords = self.gui.frame_canvas.coords(self.rect_id)
-            if not coords or len(coords) < 4:
-                print(f"Invalid rect_id: {self.rect_id}, coords: {coords}")
+            # Polygon aus dem DataFrame holen
+            polygon_list = self._safe_parse_list(row.get('polygon'))
+            if self.polygon_index >= len(polygon_list):
+                print(f"[ERROR] Polygon index {self.polygon_index} out of range.")
                 return
-        except tk.TclError:
-            print(f"rect_id {self.rect_id} is invalid (possibly deleted).")
-            return
 
-        # Setze Zustand für Änderung
-        self.selected_annotation_df_index = df_index
-        self.rect_start = (coords[0], coords[1])
-        self.rect_end = (coords[2], coords[3])
-        self.create_resize_handles()
+            polygon = polygon_list[self.polygon_index]
+            if not isinstance(polygon, list) or len(polygon) < 3:
+                print("[ERROR] Invalid polygon data.")
+                return
 
+            # Neue Punkte zeichnen
+            for x, y in polygon:
+                self.polygon_points.append([x, y])
+                point_id = self.gui.frame_canvas.create_oval(
+                    x - 4, y - 4, x + 4, y + 4, fill="red"
+                )
+                self.polygon_point_ids.append(point_id)
+
+            # Polygon-Linie zeichnen
+            self.redraw_polygon()
+
+            print(f"[DEBUG] Polygon mit {len(polygon)} Punkten geladen.")
+        else:
+            try:
+                self.rect_id = self.drawn_rect_ids[self.listbox_index]
+                coords = self.gui.frame_canvas.coords(self.rect_id)
+                if len(coords) == 4:
+                    x1, y1, x2, y2 = coords
+                    self.rect_start = (x1, y1)
+                    self.rect_end = (x2, y2)
+                    self.create_resize_handles()  # funktioniert jetzt ohne Argumente
+                else:
+                    print(f"[ERROR] Unexpected coords for rect_id: {coords}")
+                    return
+            except IndexError:
+                print(f"[ERROR] rect_id index {self.listbox_index} out of range.")
+                return
+
+
+    def clear_polygon_from_canvas(self):
+        # Hilfsfunktion, um alle Polygonpunkte und Linien vom Canvas zu löschen
+        for pid in getattr(self, 'polygon_point_ids', []):
+            self.gui.frame_canvas.delete(pid)
+        self.polygon_point_ids = []
+
+        if hasattr(self, 'polygon_line_id') and self.polygon_line_id is not None:
+            self.gui.frame_canvas.delete(self.polygon_line_id)
+            self.polygon_line_id = None
 
     def create_resize_handles(self):
         """
@@ -408,6 +642,7 @@ class VideoAnnotationHandler():
             canvas.create_rectangle(x1 - size, y2 - size, x1 + size, y2 + size, fill="blue", tags="handle_bl"),
             canvas.create_rectangle(x2 - size, y2 - size, x2 + size, y2 + size, fill="blue", tags="handle_br"),
         ]
+
 
     def remove_resize_handles(self):
         """
@@ -508,11 +743,10 @@ class VideoAnnotationHandler():
 
         return None
     
-
     def update_annotation_in_listbox(self):
         """
-        Updates the annotation DataFrame and listbox entry after rectangle modification.
-        Uses self.selected_annotation_original_index, which must refer to a valid DataFrame index.
+        Updates the annotation DataFrame and listbox entry after rectangle or polygon modification.
+        Uses self.selected_annotation_original_index and self.listbox_index.
         """
         if self.selected_annotation_original_index is None:
             print("[Update Error] No annotation was selected for modification (original index is None).")
@@ -522,56 +756,73 @@ class VideoAnnotationHandler():
             print(f"[Update Error] Index {self.selected_annotation_original_index} not found in DataFrame.")
             return
 
-        # Neue Geometrie berechnen
-        new_x, new_y, new_w, new_h = self.calculate_rectangle()
-        
-        # Bestehende Listen aus dem DataFrame lesen und parsen
-        x_list = ast.literal_eval(self.row['x']) if isinstance(self.row['x'], str) and self.row['x'].startswith('[') else self.row['x'] if isinstance(self.row['x'], list) else []
-        y_list = ast.literal_eval(self.row['y']) if isinstance(self.row['y'], str) and self.row['y'].startswith('[') else self.row['y'] if isinstance(self.row['y'], list) else []
-        w_list = ast.literal_eval(self.row['w']) if isinstance(self.row['w'], str) and self.row['w'].startswith('[') else self.row['w'] if isinstance(self.row['w'], list) else []
-        h_list = ast.literal_eval(self.row['h']) if isinstance(self.row['h'], str) and self.row['h'].startswith('[') else self.row['h'] if isinstance(self.row['h'], list) else []
-        class_list = ast.literal_eval(self.row['class']) if isinstance(self.row['class'], str) and self.row['x'].startswith('[') else self.row['class'] if isinstance(self.row['class'], list) else []
+        annotation_text = self.gui.video_annotation_listbox.get(self.listbox_index)
 
+        # ======= Polygon =======
+        if "Polygon" in annotation_text:
+            polygon_list = self._safe_parse_list(self.row.get("polygon"))
+            if self.polygon_index >= len(polygon_list):
+                print(f"[Update Error] Polygon index {self.listbox_index} out of range.")
+                return
 
-        # Prüfen, ob annotation_idx gültig ist
-        if self.listbox_index >= len(x_list) or self.listbox_index >= len(y_list) or self.listbox_index >= len(w_list) or self.listbox_index >= len(h_list):
+            # Neue Polygon-Koordinaten speichern
+            polygon_list[self.polygon_index] = self.polygon_points.copy()
+            self.gui.all_annotations.at[self.selected_annotation_original_index, "polygon"] = polygon_list
+
+            # Optional: Listbox-Text aktualisieren
+            class_list = self._safe_parse_list(self.row.get("class"))
+            class_label = class_list[self.polygon_index] if self.polygon_index < len(class_list) else "Unknown"
+
+            updated_text = f"{str(class_label).ljust(12)} Polygon ({len(self.polygon_points)} P)"
+            self.gui.video_annotation_listbox.delete(self.polygon_index)
+            self.gui.video_annotation_listbox.insert(self.polygon_index, updated_text)
+            self.gui.video_annotation_listbox.selection_set(self.polygon_index)
+            self.gui.video_annotation_listbox.activate(self.polygon_index)
+
+            print(f"[INFO] Updated Polygon annotation at index {self.polygon_index}")
+            return
+
+        # ======= Bounding Box =======
+        try:
+            new_x, new_y, new_w, new_h = self.calculate_rectangle()
+        except TypeError:
+            print("[Update Error] Could not calculate rectangle – rect_start or rect_end is None.")
+            return
+
+        x_list = self._safe_parse_list(self.row.get("x"))
+        y_list = self._safe_parse_list(self.row.get("y"))
+        w_list = self._safe_parse_list(self.row.get("w"))
+        h_list = self._safe_parse_list(self.row.get("h"))
+        class_list = self._safe_parse_list(self.row.get("class"))
+
+        if self.listbox_index >= len(x_list) or self.listbox_index >= len(y_list) or \
+        self.listbox_index >= len(w_list) or self.listbox_index >= len(h_list):
             print(f"[Update Error] annotation index {self.listbox_index} out of range in DataFrame lists.")
             return
 
-        # Listen an der Stelle annotation_idx aktualisieren
         x_list[self.listbox_index] = new_x
         y_list[self.listbox_index] = new_y
         w_list[self.listbox_index] = new_w
         h_list[self.listbox_index] = new_h
 
-        print("DEBUG x list ", x_list)
-
-        # Aktualisierte Listen zurück in DataFrame schreiben
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'x'] = x_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'y'] = y_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'w'] = w_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'h'] = h_list
 
+        class_label = class_list[self.listbox_index] if self.listbox_index < len(class_list) else "Unknown"
+        updated_text = f"{str(class_label).ljust(12)} x:{str(new_x).ljust(5)} y:{str(new_y).ljust(5)} w:{str(new_w).ljust(5)} h:{str(new_h).ljust(5)}"
 
-        # Listbox-Eintrag aktualisieren (Klassen-Label hier einzeln aus der Liste holen)
-        if self.listbox_index < len(class_list):
-            class_label = class_list[self.listbox_index]
-        else:
-            class_label = "Unknown"
+        self.gui.video_annotation_listbox.delete(self.listbox_index)
+        self.gui.video_annotation_listbox.insert(self.listbox_index, updated_text)
+        self.gui.video_annotation_listbox.selection_set(self.listbox_index)
+        self.gui.video_annotation_listbox.activate(self.listbox_index)
 
-        selected_in_listbox = self.gui.video_annotation_listbox.curselection()
-        if selected_in_listbox:
-            updated_text = f"{str(class_label).ljust(12)} x:{str(new_x).ljust(5)} y:{str(new_y).ljust(5)} w:{str(new_w).ljust(5)} h:{str(new_h).ljust(5)}"
-
-            self.gui.video_annotation_listbox.delete(self.listbox_index)
-            self.gui.video_annotation_listbox.insert(self.listbox_index, updated_text)
-            self.gui.video_annotation_listbox.selection_set(self.listbox_index)
-            self.gui.video_annotation_listbox.activate(self.listbox_index)
-        else:
-            print("[Warning] Could not find selected item in listbox to update its text.")
+        print(f"[INFO] Updated Bounding Box annotation at index {self.listbox_index}")
 
 
-    def load_masks_for_frame(self, image_id):
+
+    def load_masks_for_frame(self):
         """Load masks for the selected frame into canvas."""
         self.clear_all_masks()
 
@@ -581,7 +832,7 @@ class VideoAnnotationHandler():
             for index, mask_entry in enumerate(self.gui.all_masks):
                 mask_img_id = mask_entry.get('img_ID', 'MISSING_ID')
 
-                if str(mask_img_id).strip() == str(image_id).strip():
+                if str(mask_img_id).strip() == str(self.current_image_id ).strip():
                     found_count += 1
 
                     try:
@@ -614,8 +865,6 @@ class VideoAnnotationHandler():
                         self.gui.all_masks[index]['mask_id'] = None
                         continue
 
-        #print(f"[DEBUG] Loaded and drew {found_count} masks for frame {image_id}")
-
 
 
     def clear_all_masks(self):
@@ -633,7 +882,7 @@ class VideoAnnotationHandler():
 
         if self.gui.masks_visible.get():
             print("[DEBUG] Masks will be shown.")
-            self.load_masks_for_frame(self.gui.current_frame_id)
+            self.load_masks_for_frame()
         else:
             print("[DEBUG] Mask will not be shown.")
             self.clear_all_masks()
@@ -661,16 +910,24 @@ class VideoAnnotationHandler():
         # Lade Annotationen aus CSV oder gespeicherter Quelle
         annotated_df = self.annotation_loader.load_annotations_from_annotable()
 
-        # Video-ID extrahieren aus img_ID → alles vor '_frame...'
-        annotated_df['video_ID'] = annotated_df['img_ID'].apply(
-            lambda x: x.split("_frame")[0] if "_frame" in x else x)
+        # make sure the DataFrame has the necessary columns
+        needed_columns = ['img_ID' , 'class', 'x', 'y', 'w', 'h', 'polygon', 'class_polygon']
+        missing_columns = [col for col in needed_columns if col not in annotated_df.columns]
+        if missing_columns:
+            print(f"[ERROR] Annotation DataFrame is missing necessary columns: {missing_columns}")
+            return
+
+        # set default values for 'class' and 'class_polygon'
+        for col in ['class', 'class_polygon']:
+            annotated_df[col] = annotated_df[col].apply(
+                lambda x: "NN" if pd.isna(x) or x == [] else x
+            )
         
         # Zähle annotierte Frames pro Video
-        annotated_frame_counts = (
-            annotated_df[annotated_df['class'] != 'NN']['video_ID']
-            .value_counts()
-            .to_dict()
-            )
+        annotated_frame_counts = annotated_df.loc[
+                (annotated_df['class'] != "NN") | (annotated_df['class_polygon'] != "NN"),
+                'img_ID'
+            ].astype(str).str.strip()
 
         self.get_number_of_frames_for_videos()
 
@@ -767,10 +1024,26 @@ class VideoAnnotationHandler():
 
             # Load annotations for the current frame
             self.load_annotations_for_frame()
-            self.load_masks_for_frame(self.gui.current_frame_id)
+            self.load_masks_for_frame()
             
             # Update frame label
             self.gui.frame_index_label.config(text=f"Frame {self.gui.current_frame_index + 1} / {len(self.current_frames)}")
             self.gui.video_slider.config(to=len(self.current_frames)-1)
         except Exception as e:
             print(f"Error loading frame: {e}")
+
+    def redraw_polygon(self):
+        # Entferne alle alten Polygon-Linien
+        canvas_tag = f"polygon_{self.polygon_index}"
+        print("canvas tag",canvas_tag)
+        self.gui.frame_canvas.delete(canvas_tag)
+
+        if len(self.polygon_points) >= 2:
+            flat_points = [coord for point in self.polygon_points for coord in point]
+            
+            # Polygon schließen, indem man den ersten Punkt erneut anhängt
+            flat_points += self.polygon_points[0]
+
+            self.polygon_line_id = self.gui.frame_canvas.create_polygon(
+                flat_points, outline="blue", fill="", width=2, tags=canvas_tag
+                )

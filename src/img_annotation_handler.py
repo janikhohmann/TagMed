@@ -20,7 +20,6 @@ class ImgAnnotationHandler:
 
         self.selected_annotation_index = None
 
-
         self.dragging_handle = None
         self.dragging_rectangle = False
         self.last_mouse_pos = None
@@ -48,7 +47,7 @@ class ImgAnnotationHandler:
             print("[ERROR] 'img_ID' column not found in DataFrame.")
             return
 
-        # Searchfor row with Image-ID
+        # Search for row with Image-ID
         match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
         if not match.any():
             print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
@@ -287,7 +286,7 @@ class ImgAnnotationHandler:
 
     def on_press(self, event):
         """
-        Starts drawing or modifying a rectangle depending on mode.
+        Starts drawing or modifying a rectangle or polygon depending on mode.
         """
         x, y = event.x, event.y # get mouse position
         # get annotation type from GUI
@@ -342,10 +341,7 @@ class ImgAnnotationHandler:
                     if abs(event.x - px) < 6 and abs(event.y - py) < 6:
                         self.selected_point_index = i
                         return
-
-
-
-
+                    
 
     def on_drag(self, event):
         """

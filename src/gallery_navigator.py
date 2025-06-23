@@ -481,7 +481,7 @@ class GalleryNavigator:
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.video_annotation_type = tk.StringVar()
         type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_annotation_type,
-                                    values=["Bounding Box", "Mask"], width=15)
+                                    values=["Bounding Box", "Polygon"], width=15)
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
