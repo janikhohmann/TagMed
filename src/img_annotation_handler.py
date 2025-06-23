@@ -553,10 +553,10 @@ class ImgAnnotationHandler:
             # Alte Handles, Punkte und Polygon-Linie löschen
             self.remove_resize_handles()  # Entfernt ggf. alte Bounding Box Handles
 
-            # for pid in getattr(self, 'polygon_point_ids', []):
-            #     self.gui.image_canvas.delete(pid)
-            # self.polygon_point_ids = []
-            # self.polygon_points = []
+            for pid in getattr(self, 'polygon_point_ids', []):
+                self.gui.image_canvas.delete(pid)
+            self.polygon_point_ids = []
+            self.polygon_points = []
 
             # if hasattr(self, 'polygon_line_id') and self.polygon_line_id is not None:
             #     self.gui.image_canvas.delete(self.polygon_line_id)
@@ -840,7 +840,7 @@ class ImgAnnotationHandler:
         ]
 
         # load annotations from csv
-        annotated_df = self.annotation_loader.load_annotations_from_annotable()
+        annotated_df = self.gui.all_annotations
 
         # make sure the DataFrame has the necessary columns
         needed_columns = ['img_ID' , 'class', 'x', 'y', 'w', 'h', 'polygon', 'class_polygon']
@@ -878,7 +878,7 @@ class ImgAnnotationHandler:
     def redraw_polygon(self):
         # Entferne alle alten Polygon-Linien
         canvas_tag = f"polygon_{self.polygon_index}"
-        print("canvas tag",canvas_tag)
+
         self.gui.image_canvas.delete(canvas_tag)
 
         if len(self.polygon_points) >= 2:

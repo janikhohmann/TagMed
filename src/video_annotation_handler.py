@@ -119,6 +119,7 @@ class VideoAnnotationHandler():
         self.update_video_listbox_with_annotation_colors()
 
 
+
     def delete_annotation(self):
         selected = self.gui.video_annotation_listbox.curselection()
         if not selected:
@@ -181,11 +182,12 @@ class VideoAnnotationHandler():
             # Entferne Listbox-Eintrag
             self.gui.video_annotation_listbox.delete(index)
 
-            self.update_video_listbox_with_annotation_colors()
             print(f"[DEBUG] Deleted annotation at index {index} from image {image_id}.")
 
         except Exception as e:
             print(f"[ERROR] Failed to delete annotation: {e}")
+        
+        self.update_video_listbox_with_annotation_colors()
 
 
 
@@ -381,10 +383,7 @@ class VideoAnnotationHandler():
             is_polygon = "Polygon" in selected_text
         except: 
             return
-        
-        print(f"[DEBUG] Updating polygon point at index {self.selected_point_index}")
-        print(self.gui.modify_mode.get())
-        print(is_polygon)
+
         # ==== modify mode ====
         if self.gui.modify_mode.get():
             if not is_polygon:
@@ -394,14 +393,11 @@ class VideoAnnotationHandler():
                     self.move_rectangle(x, y)
                 self.last_mouse_pos = (x, y)
             else:
-                print("hier")
                 if self.selected_point_index is not None:
                     self.polygon_points[self.selected_point_index] = [x, y]
 
                     # Update Punktkreis auf Canvas
-                    print(f"[DEBUG] Updating polygon point at index {self.selected_point_index} to ({x}, {y})")
                     point_id = self.polygon_point_ids[self.selected_point_index]
-                    print(point_id)
                     self.gui.frame_canvas.coords(point_id, x-4, y-4, x+4, y+4)
 
                     self.redraw_polygon()
@@ -563,6 +559,12 @@ class VideoAnnotationHandler():
 
             # Alte Handles, Punkte und Polygon-Linie löschen
             self.remove_resize_handles()  # Entfernt ggf. alte Bounding Box Handles
+
+            for pid in getattr(self, 'polygon_point_ids', []):
+                self.gui.frame_canvas.delete(pid)
+                self.polygon_point_ids = []
+                self.polygon_points = []
+
 
             if hasattr(self, 'polygon_index') and self.polygon_index is not None:
                 tag_to_delete = f"polygon_{self.polygon_index}"
@@ -908,7 +910,7 @@ class VideoAnnotationHandler():
         ]
 
         # Lade Annotationen aus CSV oder gespeicherter Quelle
-        annotated_df = self.annotation_loader.load_annotations_from_annotable()
+        annotated_df = self.gui.all_annotations
 
         # make sure the DataFrame has the necessary columns
         needed_columns = ['img_ID' , 'class', 'x', 'y', 'w', 'h', 'polygon', 'class_polygon']
@@ -934,7 +936,8 @@ class VideoAnnotationHandler():
         for video in videos:
             video_id = video.split(".")[0]
             total_frames = self.number_of_frames.get(video_id, 0)
-            annotated_frames = annotated_frame_counts.get(video_id, 0)
+            annotated_frames = annotated_frame_counts.str.startswith(video_id + "_").sum()
+
             #print(f"[DEBUG] Video: {video}, Total Frames: {total_frames}, Annotated Frames: {annotated_frames}")
 
             self.gui.video_listbox.insert(tk.END, video)
@@ -1035,7 +1038,7 @@ class VideoAnnotationHandler():
     def redraw_polygon(self):
         # Entferne alle alten Polygon-Linien
         canvas_tag = f"polygon_{self.polygon_index}"
-        print("canvas tag",canvas_tag)
+
         self.gui.frame_canvas.delete(canvas_tag)
 
         if len(self.polygon_points) >= 2:
