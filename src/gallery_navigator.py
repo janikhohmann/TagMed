@@ -419,7 +419,7 @@ class GalleryNavigator:
         delete_button.pack(pady=2, fill=tk.X)
 
         save_button = tk.Button(controls_frame, text="Save", width=12,
-                               command=lambda: self.save_annotation_gui(on_complete=self.on_annotations_saved),
+                               command=lambda: self.save_annotation_gui(on_complete=None),
                                bg="#d4fcd4")
         save_button.pack(pady=2, fill=tk.X)
 
@@ -507,7 +507,7 @@ class GalleryNavigator:
         delete_button.bind("<Double-Button-1>", lambda event: self.delete_annotations_for_all_frames_question())
 
         save_button = tk.Button(controls_frame, text="Save", width=12,
-                                command=self.annotation_loader.save_annotations_to_anno_table,
+                                command=lambda: self.save_annotation_gui(on_complete=None),
                                 bg="#d4fcd4")
         save_button.pack(pady=2, fill=tk.X)
 
@@ -596,10 +596,6 @@ class GalleryNavigator:
         # Tracker Prompt Button (Platzhalter)
         tracker_prompt_button = tk.Button(tracker_controls_row, text="Tracker Prompts", width=16)
         tracker_prompt_button.pack(side="left", padx=5)
-
-
-
-
 
 
 
