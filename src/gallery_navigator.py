@@ -10,6 +10,7 @@ from data_loader import DataLoader
 from medical_record_loader import MedicalRecordLoader
 from img_annotation_handler import ImgAnnotationHandler
 from video_annotation_handler import VideoAnnotationHandler
+from video_tracking import VideoTracking
 
 
 class GalleryNavigator:
@@ -38,6 +39,8 @@ class GalleryNavigator:
         self.masks_visible = tk.BooleanVar(value=False)  # Flag to indicate if masks are visible
         self.click_mode = False  # Flag to indicate if click mode is active
         self.good_2_go_mode = False  # Flag to indicate if good-to-go mode is active
+
+        self.video_tracking = VideoTracking(self)
 
 
 
@@ -584,7 +587,8 @@ class GalleryNavigator:
         tracking_dropdown.current(0)
 
         # Start Tracking Button
-        start_tracker_button = tk.Button(tracker_controls_row, text="Start Tracking", width=16, bg="#d4fcd4")
+        start_tracker_button = tk.Button(tracker_controls_row, text="Start Tracking", width=16, bg="#d4fcd4",
+                                         command=self.video_tracking.tracking_starter)
         start_tracker_button.pack(side="left", padx=5)
 
         # Masken-Checkbox

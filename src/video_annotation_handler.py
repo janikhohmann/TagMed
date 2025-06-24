@@ -641,15 +641,15 @@ class VideoAnnotationHandler():
                 )
                 self.polygon_point_ids.append(point_id)
 
-            annotype_list = self._safe_parse_list(row.get('polygon_annotype'))
-            # Prüfen, ob Index gültig ist
-            if self.polygon_index < len(annotype_list):
-                annotype_list[self.polygon_index] = "manually"
-            else:
-                print(f"[ERROR] polygon_index {self.polygon_index} out of range for polygon_annotype.")
+            # annotype_list = self._safe_parse_list(row.get('polygon_annotype'))
+            # # Prüfen, ob Index gültig ist
+            # if self.polygon_index < len(annotype_list):
+            #     annotype_list[self.polygon_index] = "manually"
+            # else:
+            #     print(f"[ERROR] polygon_index {self.polygon_index} out of range for polygon_annotype.")
 
-            # Die geänderte Liste zurückschreiben
-            row['polygon_annotype'] = annotype_list
+            # # Die geänderte Liste zurückschreiben
+            # row['polygon_annotype'] = annotype_list
 
             # Polygon-Linie zeichnen
             self.redraw_polygon()
@@ -659,17 +659,13 @@ class VideoAnnotationHandler():
             try:
                 self.rect_id = self.drawn_rect_ids[self.listbox_index]
                 coords = self.gui.frame_canvas.coords(self.rect_id)
-                # bbox_annotype als Liste parsen
-                bbox_annotype_list = self._safe_parse_list(row.get('bbox_annotype'))
 
-                # Prüfen, ob Index gültig ist
-                if self.listbox_index < len(bbox_annotype_list):
-                    bbox_annotype_list[self.listbox_index] = "manually"
-                else:
-                    print(f"[ERROR] listbox_index {self.listbox_index} out of range for bbox_annotype.")
+                # bb_annotype als Liste parsen
+                bbox_annotype_list = self._safe_parse_list(row.get('bb_annotype'))
 
-                # Geänderte Liste zurückschreiben
-                row['bbox_annotype'] = bbox_annotype_list
+
+                bbox_annotype_list[self.listbox_index] = "manually"
+                self.gui.all_annotations.at[df_index, 'bb_annotype'] = bbox_annotype_list
 
                 if len(coords) == 4:
                     x1, y1, x2, y2 = coords
