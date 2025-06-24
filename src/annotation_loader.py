@@ -200,8 +200,8 @@ class AnnotationLoader():
                     "exam_mode": "NN",
                     "organ": "NN",
                     "file_type": file_type,
-                    "bb_annotype": None,
-                    "polygon_annotype": None,
+                    "bb_annotype": "NN",
+                    "polygon_annotype": "NN",
                     "new_path": os.path.join(root, file)
                 })
 

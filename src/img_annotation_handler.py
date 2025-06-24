@@ -86,7 +86,7 @@ class ImgAnnotationHandler:
             annotation_text = f"{img_selected_class.ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
             self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
 
-            for col, val in zip(['x', 'y', 'w', 'h', 'class'], [x, y, w, h, img_selected_class]):
+            for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [x, y, w, h, img_selected_class, 'manually']):
                 self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
 
             self.drawn_rect_ids.append(self.rect_id)
@@ -115,6 +115,8 @@ class ImgAnnotationHandler:
                 self.gui.all_annotations.at[idx, 'polygon'], polygon_copy)
             self.gui.all_annotations.at[idx, 'class_polygon'] = append_or_init_list(
                 self.gui.all_annotations.at[idx, 'class_polygon'], img_selected_class)
+            self.gui.all_annotations.at[idx, 'polygon_annotype'] = append_or_init_list(
+                self.gui.all_annotations.at[idx, 'polygon_annotype'], "manually")
 
             print(f"[DEBUG] Added Polygon with {len(self.polygon_points)} points")
 
@@ -144,6 +146,8 @@ class ImgAnnotationHandler:
                 self.gui.all_annotations.at[idx, 'polygon'], polygon_copy)
             self.gui.all_annotations.at[idx, 'class_polygon'] = append_or_init_list(
                 self.gui.all_annotations.at[idx, 'class_polygon'], img_selected_class)
+            self.gui.all_annotations.at[idx, 'polygon_annotype'] = append_or_init_list(
+                self.gui.all_annotations.at[idx, 'polygon_annotype'], "manually")
 
             print(f"[DEBUG] Added Polygon with {len(self.polygon_points)} points")
 
@@ -200,16 +204,21 @@ class ImgAnnotationHandler:
                 # Entferne Polygon-Daten
                 polygons = self._safe_parse_list(self.gui.all_annotations.at[idx, 'polygon'])
                 class_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'class_polygon'])
+                annotype_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'polygon_annotype'])
+
 
                 polygons.pop(index)
                 if index < len(class_list):
                     class_list.pop(index)
+                if index < len(annotype_list):
+                    annotype_list.pop(index)
 
                 self.gui.all_annotations.at[idx, 'polygon'] = polygons if polygons else "NN"
                 self.gui.all_annotations.at[idx, 'class_polygon'] = class_list if class_list else "NN"
+                self.gui.all_annotations.at[idx, 'polygon_annotype'] = annotype_list if annotype_list else "NN"
             else:
                 # Entferne Bounding Box-Daten
-                for col in ['x', 'y', 'w', 'h', 'class']:
+                for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype']:
                     val = self._safe_parse_list(self.gui.all_annotations.at[idx, col])
                     if index < len(val):
                         val.pop(index)
@@ -230,7 +239,7 @@ class ImgAnnotationHandler:
             # Entferne Listbox-Eintrag
             self.gui.img_annotation_listbox.delete(index)
 
-            self.load_annotations_for_image(self.image_id)
+            self.load_annotations_for_image(image_id)
 
             self.update_image_listbox_with_annotation_colors()
             print(f"[DEBUG] Deleted annotation at index {index} from image {image_id}.")
@@ -665,6 +674,16 @@ class ImgAnnotationHandler:
                 )
                 self.polygon_point_ids.append(point_id)
 
+            annotype_list = self._safe_parse_list(row.get('polygon_annotype'))
+            # Prüfen, ob Index gültig ist
+            if self.polygon_index < len(annotype_list):
+                annotype_list[self.polygon_index] = "manually"
+            else:
+                print(f"[ERROR] polygon_index {self.polygon_index} out of range for polygon_annotype.")
+
+            # Die geänderte Liste zurückschreiben
+            row['polygon_annotype'] = annotype_list
+
             # Polygon-Linie zeichnen
             self.redraw_polygon()
 
@@ -673,6 +692,19 @@ class ImgAnnotationHandler:
             try:
                 self.rect_id = self.drawn_rect_ids[self.listbox_index]
                 coords = self.gui.image_canvas.coords(self.rect_id)
+
+                # bbox_annotype als Liste parsen
+                bbox_annotype_list = self._safe_parse_list(row.get('bbox_annotype'))
+
+                # Prüfen, ob Index gültig ist
+                if self.listbox_index < len(bbox_annotype_list):
+                    bbox_annotype_list[self.listbox_index] = "manually"
+                else:
+                    print(f"[ERROR] listbox_index {self.listbox_index} out of range for bbox_annotype.")
+
+                # Geänderte Liste zurückschreiben
+                row['bbox_annotype'] = bbox_annotype_list
+
                 if len(coords) == 4:
                     x1, y1, x2, y2 = coords
                     self.rect_start = (x1, y1)
@@ -848,7 +880,7 @@ class ImgAnnotationHandler:
             polygon_list[self.polygon_index] = self.polygon_points.copy()
             self.gui.all_annotations.at[self.selected_annotation_original_index, "polygon"] = polygon_list
 
-            updated_text = f"{str(class_label).ljust(12)} Polygon ({len(self.polygon_points)} P)"
+            updated_text = f"{str(class_label).ljust(12)} Polygon: {len(self.polygon_points)} points"
             self.gui.img_annotation_listbox.delete(self.listbox_index)
             self.gui.img_annotation_listbox.insert(self.listbox_index, updated_text)
             self.gui.img_annotation_listbox.selection_set(self.listbox_index)
