@@ -5,6 +5,7 @@ import os
 import ast
 
 from annotation_loader import AnnotationLoader
+from magic_wand import MagicWand
 
 
 class ImgAnnotationHandler:
@@ -36,6 +37,7 @@ class ImgAnnotationHandler:
 
 
         self.annotation_loader = AnnotationLoader()
+        self.magic_wand = MagicWand()
 
 
     def add_annotation(self):
@@ -119,6 +121,36 @@ class ImgAnnotationHandler:
             # clean list after adding to dataframe
             self.polygon_points.clear()
 
+        # ==== Magic Wand ===
+        elif img_annotation_type == "Magic Wand":
+            if self.gui.all_annotations.at[idx, "class"] != "NN": # safe exit when already an BB annotation exists
+                self.gui.wrong_annotation_warning_gui("Polygon")
+                self.delete_all_polygons()
+                return
+            
+            if not hasattr(self, "polygon_points") or not self.polygon_points:
+                print("[ERROR] No polygon points available.")
+                return
+            
+            annotation_text = f"{img_selected_class.ljust(12)} Polygon: {len(self.polygon_points)} points"
+            self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
+
+            # save polygon points in DataFrame
+            if 'polygon' not in self.gui.all_annotations.columns:
+                self.gui.all_annotations['polygon'] = None  # initalize column if not exists
+
+            polygon_copy = [point.copy() for point in self.polygon_points]
+            self.gui.all_annotations.at[idx, 'polygon'] = append_or_init_list(
+                self.gui.all_annotations.at[idx, 'polygon'], polygon_copy)
+            self.gui.all_annotations.at[idx, 'class_polygon'] = append_or_init_list(
+                self.gui.all_annotations.at[idx, 'class_polygon'], img_selected_class)
+
+            print(f"[DEBUG] Added Polygon with {len(self.polygon_points)} points")
+
+            # clean list after adding to dataframe
+            self.polygon_points.clear()
+
+
         else:
             print(f"[ERROR] Unknown annotation type:: {img_annotation_type}")
             return
@@ -135,10 +167,10 @@ class ImgAnnotationHandler:
             self.remove_resize_handles()
             self.update_annotation_in_listbox()
             for pid in getattr(self, 'polygon_point_ids', []):
-                self.gui.frame_canvas.delete(pid)
+                self.gui.image_canvas.delete(pid)
                 self.polygon_point_ids = []
                 self.polygon_points = []
-                
+
 
         index = selected[0]  # Position in der Listbox
         image_id = self.gui.selected_image_index.split(".")[0]
@@ -316,8 +348,8 @@ class ImgAnnotationHandler:
         # get annotation type from GUI
         annotation_mode = self.gui.img_annotation_type.get()
 
-        if annotation_mode not in ["Bounding Box", "Polygon"]:
-            print("[ERROR] Invalid annotation type selected. Only 'Bounding Box' and 'Polygon' are supported.")
+        if annotation_mode not in ["Bounding Box", "Polygon", "Magic Wand"]:
+            print("[ERROR] Invalid annotation type selected. Only 'Bounding Box', 'Polygon' and 'Magic Wand' are supported.")
             return
         
 
@@ -340,10 +372,20 @@ class ImgAnnotationHandler:
                         polygon_index += 1
                 self.polygon_index = polygon_index
 
-                self.polygon_points.append([x, y])
-                point_id = self.gui.image_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red", tags="polygon")
-                self.polygon_point_ids.append(point_id)
-                self.redraw_polygon()
+                if annotation_mode == "Magic Wand":
+                    magic_list = self.magic_wand.do_the_magic(self.gui.pil_image_for_processing, x, y)
+                    print(magic_list)
+                    for magic_point in magic_list:
+                        px, py = magic_point
+                        self.polygon_points.append([px, py])
+                        point_id = self.gui.image_canvas.create_oval(px-4, py-4, px+4, py+4, fill="red", tags="polygon")
+                        self.polygon_point_ids.append(point_id)
+
+                else:
+                    self.polygon_points.append([x, y])
+                    point_id = self.gui.image_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red", tags="polygon")
+                    self.polygon_point_ids.append(point_id)
+                    self.redraw_polygon()
         
         # Entscheide, ob es sich um Bounding Box oder Polygon handelt
         try:
@@ -792,7 +834,7 @@ class ImgAnnotationHandler:
             print(f"[Update Error] Index {self.selected_annotation_original_index} not found in DataFrame.")
             return
 
-        annotation_text = self.gui.video_annotation_listbox.get(self.listbox_index)
+        annotation_text = self.gui.img_annotation_listbox.get(self.listbox_index)
         class_label = annotation_text.split(" ")[0]
 
         # ======= Polygon =======
@@ -842,6 +884,8 @@ class ImgAnnotationHandler:
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'y'] = y_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'w'] = w_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'h'] = h_list
+
+        print(class_label)
 
         updated_text = f"{str(class_label).ljust(12)} x:{str(new_x).ljust(5)} y:{str(new_y).ljust(5)} w:{str(new_w).ljust(5)} h:{str(new_h).ljust(5)}"
 

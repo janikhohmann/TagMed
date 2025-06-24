@@ -851,7 +851,6 @@ class VideoAnnotationHandler():
         y_list = self._safe_parse_list(self.row.get("y"))
         w_list = self._safe_parse_list(self.row.get("w"))
         h_list = self._safe_parse_list(self.row.get("h"))
-        class_list = self._safe_parse_list(self.row.get("class"))
 
         if self.listbox_index >= len(x_list) or self.listbox_index >= len(y_list) or \
         self.listbox_index >= len(w_list) or self.listbox_index >= len(h_list):
@@ -867,6 +866,7 @@ class VideoAnnotationHandler():
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'y'] = y_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'w'] = w_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'h'] = h_list
+
 
         updated_text = f"{str(class_label).ljust(12)} x:{str(new_x).ljust(5)} y:{str(new_y).ljust(5)} w:{str(new_w).ljust(5)} h:{str(new_h).ljust(5)}"
 

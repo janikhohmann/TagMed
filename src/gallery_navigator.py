@@ -297,6 +297,7 @@ class GalleryNavigator:
 
         width, height = self.image_size
         pil_image = pil_image.resize((width, height), Image.Resampling.LANCZOS)
+        self.pil_image_for_processing = pil_image.copy() 
 
         self.tk_image = ImageTk.PhotoImage(pil_image)
         x = 0 
@@ -397,7 +398,7 @@ class GalleryNavigator:
 
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.img_annotation_type = tk.StringVar()
-        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_annotation_type, values=["Bounding Box", "Polygon"], width=15)
+        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_annotation_type, values=["Bounding Box", "Polygon", "Magic Wand"], width=15)
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
