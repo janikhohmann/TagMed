@@ -42,6 +42,7 @@ class ImgAnnotationHandler:
         img_selected_class = self.gui.img_selected_class.get()
         img_annotation_type = self.gui.img_annotation_type.get()
         image_id = self.gui.selected_image_index.split(".")[0]
+        self.image_id = image_id
 
         if 'img_ID' not in self.gui.all_annotations.columns:
             print("[ERROR] 'img_ID' column not found in DataFrame.")
@@ -74,6 +75,11 @@ class ImgAnnotationHandler:
 
         # === Bounding Box Annotation ===
         if img_annotation_type == "Bounding Box":
+            if self.gui.all_annotations.at[idx, "polygon"] != "NN": # safe exit when already an polygon annotation exists
+                self.gui.wrong_annotation_warning_gui("Bounding Box")
+                self.delete_all_bounding_boxes()
+                return
+            
             x, y, w, h = self.calculate_rectangle()
             annotation_text = f"{img_selected_class.ljust(12)} x:{str(x).ljust(5)} y:{str(y).ljust(5)} w:{str(w).ljust(5)} h:{str(h).ljust(5)}"
             self.gui.img_annotation_listbox.insert(tk.END, annotation_text)
@@ -86,6 +92,11 @@ class ImgAnnotationHandler:
 
         # === Polygon Annotation ===
         elif img_annotation_type == "Polygon":
+            if self.gui.all_annotations.at[idx, "class"] != "NN": # safe exit when already an BB annotation exists
+                self.gui.wrong_annotation_warning_gui("Polygon")
+                self.delete_all_polygons()
+                return
+            
             if not hasattr(self, "polygon_points") or not self.polygon_points:
                 print("[ERROR] No polygon points available.")
                 return
@@ -118,6 +129,16 @@ class ImgAnnotationHandler:
         selected = self.gui.img_annotation_listbox.curselection()
         if not selected:
             return
+
+        if self.gui.modify_mode.get(): # abfangen falls im modify modus
+            self.gui.modify_mode.set(False)
+            self.remove_resize_handles()
+            self.update_annotation_in_listbox()
+            for pid in getattr(self, 'polygon_point_ids', []):
+                self.gui.frame_canvas.delete(pid)
+                self.polygon_point_ids = []
+                self.polygon_points = []
+                
 
         index = selected[0]  # Position in der Listbox
         image_id = self.gui.selected_image_index.split(".")[0]
@@ -162,6 +183,7 @@ class ImgAnnotationHandler:
                         val.pop(index)
                     self.gui.all_annotations.at[idx, col] = val if val else "NN"
 
+
             # Entferne visuelles Element vom Canvas
             if index < len(self.drawn_rect_ids):
                 shape_id = self.drawn_rect_ids[index]
@@ -175,6 +197,8 @@ class ImgAnnotationHandler:
 
             # Entferne Listbox-Eintrag
             self.gui.img_annotation_listbox.delete(index)
+
+            self.load_annotations_for_image(self.image_id)
 
             self.update_image_listbox_with_annotation_colors()
             print(f"[DEBUG] Deleted annotation at index {index} from image {image_id}.")
@@ -317,7 +341,7 @@ class ImgAnnotationHandler:
                 self.polygon_index = polygon_index
 
                 self.polygon_points.append([x, y])
-                point_id = self.gui.image_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red")
+                point_id = self.gui.image_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red", tags="polygon")
                 self.polygon_point_ids.append(point_id)
                 self.redraw_polygon()
         
@@ -480,11 +504,11 @@ class ImgAnnotationHandler:
             self.gui.image_canvas.delete(rect_id)
         self.drawn_rect_ids.clear()
 
-        # Entferne alle rect_id Einträge aus dem DataFrame für das aktuelle Bild - can this be deleted?
-        current_image = self.gui.selected_image_index.split(".")[0]
-        mask = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(current_image).strip()
-        if 'rect_id' in self.gui.all_annotations.columns:
-            self.gui.all_annotations.loc[mask, 'rect_id'] = None
+        # Entferne alle rect_id Einträge aus dem DataFrame für das aktuelle Bild - can this be deleted? bezieht sich auf unterschiedliches in img and video
+        # current_image = self.gui.selected_image_index.split(".")[0]
+        # mask = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(current_image).strip()
+        # if 'rect_id' in self.gui.all_annotations.columns:
+        #     self.gui.all_annotations.loc[mask, 'rect_id'] = None
 
         # remove resize handles
         self.remove_resize_handles()
@@ -501,6 +525,9 @@ class ImgAnnotationHandler:
         self.polygon_point_ids = []
         self.polygon_points = []
 
+        # to make sure everything is deleted
+        self.delete_all_polygons()
+
         # empty listbox 
         self.gui.img_annotation_listbox.delete(0, tk.END)
         
@@ -509,6 +536,21 @@ class ImgAnnotationHandler:
         self.rect_id = None
         self.listbox_index = None
 
+
+    def delete_all_polygons(self):
+        self.gui.frame_canvas.delete("polygon")  # entfernt alle mit dem Tag "polygon"
+        self.polygon_point_ids = []
+        self.polygon_points = []
+        self.polygon_line_id = None
+        print("[DEBUG] Alle Polygon-Elemente wurden gelöscht.")
+
+    def delete_all_bounding_boxes(self):
+        self.gui.frame_canvas.delete("boundingbox")  # entfernt alle mit dem Tag "boundingbox"
+        self.drawn_rect_ids = []
+        print("[DEBUG] Alle BoundingBox-Elemente wurden gelöscht.")
+
+
+        
     def modify_annotation(self):
         """Modifies selected annotation, handling both bounding boxes and polygons."""
         if not self.gui.modify_mode.get():
@@ -520,8 +562,6 @@ class ImgAnnotationHandler:
                 self.polygon_points = []
             return
     
-
-
         selection = self.gui.img_annotation_listbox.curselection()
         if not selection:
             print("Modify Error: No annotation selected in the listbox.")
@@ -558,9 +598,6 @@ class ImgAnnotationHandler:
             self.polygon_point_ids = []
             self.polygon_points = []
 
-            # if hasattr(self, 'polygon_line_id') and self.polygon_line_id is not None:
-            #     self.gui.image_canvas.delete(self.polygon_line_id)
-            #     self.polygon_line_id = None
 
             if hasattr(self, 'polygon_index') and self.polygon_index is not None:
                 tag_to_delete = f"polygon_{self.polygon_index}"
@@ -755,7 +792,8 @@ class ImgAnnotationHandler:
             print(f"[Update Error] Index {self.selected_annotation_original_index} not found in DataFrame.")
             return
 
-        annotation_text = self.gui.img_annotation_listbox.get(self.listbox_index)
+        annotation_text = self.gui.video_annotation_listbox.get(self.listbox_index)
+        class_label = annotation_text.split(" ")[0]
 
         # ======= Polygon =======
         if "Polygon" in annotation_text:
@@ -768,15 +806,11 @@ class ImgAnnotationHandler:
             polygon_list[self.polygon_index] = self.polygon_points.copy()
             self.gui.all_annotations.at[self.selected_annotation_original_index, "polygon"] = polygon_list
 
-            # Optional: Listbox-Text aktualisieren
-            class_list = self._safe_parse_list(self.row.get("class"))
-            class_label = class_list[self.polygon_index] if self.polygon_index < len(class_list) else "Unknown"
-
             updated_text = f"{str(class_label).ljust(12)} Polygon ({len(self.polygon_points)} P)"
-            self.gui.img_annotation_listbox.delete(self.polygon_index)
-            self.gui.img_annotation_listbox.insert(self.polygon_index, updated_text)
-            self.gui.img_annotation_listbox.selection_set(self.polygon_index)
-            self.gui.img_annotation_listbox.activate(self.polygon_index)
+            self.gui.img_annotation_listbox.delete(self.listbox_index)
+            self.gui.img_annotation_listbox.insert(self.listbox_index, updated_text)
+            self.gui.img_annotation_listbox.selection_set(self.listbox_index)
+            self.gui.img_annotation_listbox.activate(self.listbox_index)
 
             print(f"[INFO] Updated Polygon annotation at index {self.polygon_index}")
             return
@@ -792,7 +826,7 @@ class ImgAnnotationHandler:
         y_list = self._safe_parse_list(self.row.get("y"))
         w_list = self._safe_parse_list(self.row.get("w"))
         h_list = self._safe_parse_list(self.row.get("h"))
-        class_list = self._safe_parse_list(self.row.get("class"))
+
 
         if self.listbox_index >= len(x_list) or self.listbox_index >= len(y_list) or \
         self.listbox_index >= len(w_list) or self.listbox_index >= len(h_list):
@@ -809,7 +843,6 @@ class ImgAnnotationHandler:
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'w'] = w_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'h'] = h_list
 
-        class_label = class_list[self.listbox_index] if self.listbox_index < len(class_list) else "Unknown"
         updated_text = f"{str(class_label).ljust(12)} x:{str(new_x).ljust(5)} y:{str(new_y).ljust(5)} w:{str(new_w).ljust(5)} h:{str(new_h).ljust(5)}"
 
         self.gui.img_annotation_listbox.delete(self.listbox_index)
@@ -852,7 +885,7 @@ class ImgAnnotationHandler:
         # set default values for 'class' and 'class_polygon'
         for col in ['class', 'class_polygon']:
             annotated_df[col] = annotated_df[col].apply(
-                lambda x: "NN" if pd.isna(x) or x == [] else x
+                lambda x: "NN" if (not hasattr(x, '__len__') and pd.isna(x)) or (hasattr(x, '__len__') and len(x) == 0) else x
             )
 
         # find all annotated image IDs (where class or class_polygon is not "NN")
@@ -888,7 +921,7 @@ class ImgAnnotationHandler:
             flat_points += self.polygon_points[0]
 
             self.polygon_line_id = self.gui.image_canvas.create_polygon(
-                flat_points, outline="blue", fill="", width=2, tags=canvas_tag
+                flat_points, outline="blue", fill="", width=2, tags=(canvas_tag, "polygon")
                 )
 
 

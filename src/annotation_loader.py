@@ -199,8 +199,9 @@ class AnnotationLoader():
                     "polygon": "NN",
                     "exam_mode": "NN",
                     "organ": "NN",
-                    "annotation_type": "NN",
                     "file_type": file_type,
+                    "bb_annotype": None,
+                    "polygon_annotype": None,
                     "new_path": os.path.join(root, file)
                 })
 

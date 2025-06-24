@@ -435,7 +435,7 @@ class GalleryNavigator:
 
         tk.Label(listbox_area_frame, text="Objects:").grid(row=0, column=0, sticky="sw", padx=(0, 0))
 
-        self.img_annotation_listbox = tk.Listbox(listbox_area_frame, height=6, width=50)
+        self.img_annotation_listbox = tk.Listbox(listbox_area_frame, height=6, width=50, selectmode=tk.SINGLE)
         self.img_annotation_listbox.grid(row=1, column=0, sticky="nw", pady=(2, 0))
 
 
@@ -523,7 +523,7 @@ class GalleryNavigator:
         listbox_area_frame.grid_rowconfigure(1, weight=1)
 
         tk.Label(listbox_area_frame, text="Objects:").grid(row=0, column=0, sticky="sw")
-        self.video_annotation_listbox = tk.Listbox(listbox_area_frame, height=6, width=50)
+        self.video_annotation_listbox = tk.Listbox(listbox_area_frame, height=6, width=50, selectmode=tk.SINGLE)
         self.video_annotation_listbox.grid(row=1, column=0, sticky="nw", pady=(2, 0))
 
         self.video_annotation_listbox.bind("<<ListboxSelect>>",
@@ -571,8 +571,6 @@ class GalleryNavigator:
         separator = tk.Frame(slider_frame, height=1, bg="black")  # Hellgrau
         separator.pack(fill="x",  padx=0, pady=4)
 
-
-
         # Navigation Buttons unterhalb
         tracker_controls_row = tk.Frame(slider_frame)
         tracker_controls_row.pack(pady=(15, 2), fill="x")
@@ -583,6 +581,10 @@ class GalleryNavigator:
                                         values=["Simple", "Advanced"], width=12)
         tracking_dropdown.pack(side="left", padx=5)
         tracking_dropdown.current(0)
+
+        # Start Tracking Button
+        start_tracker_button = tk.Button(tracker_controls_row, text="Start Tracking", width=16, bg="#d4fcd4")
+        start_tracker_button.pack(side="left", padx=5)
 
         # Masken-Checkbox
         self.mask_toggle_button = ttk.Checkbutton(
@@ -645,3 +647,21 @@ class GalleryNavigator:
 
         # Start the worker thread
         threading.Thread(target=worker, daemon=True).start()
+
+
+    def wrong_annotation_warning_gui(self, status):
+
+        if status == "Polygon":
+            info = messagebox.showinfo(
+                "Complication with annotation types",
+                "There are already bounding box annotations saved for this image. Please use only one annotation type per image.",
+                parent=self.patient_window
+            )
+
+        if status == "Bounding Box":
+            info = messagebox.showinfo(
+                "Complication with annotation types",
+                "There are already polygon annotations saved for this image. Please use only one annotation type per image.",
+                parent=self.patient_window
+            )
+
