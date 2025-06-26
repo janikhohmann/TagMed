@@ -300,7 +300,7 @@ class VideoAnnotationHandler():
                 self.drawn_rect_ids.append(polygon_id)
 
                 label = polygon_class_list[j] if j < len(polygon_class_list) else "unknown"
-                annotation_text = f"{label.ljust(12)} Polygon: {len(polygon)} Punkte"
+                annotation_text = f"{label.ljust(12)} Polygon: {len(polygon)} points"
                 self.gui.video_annotation_listbox.insert(tk.END, annotation_text)
 
                 print(f"[DEBUG] Drew polygon with id {polygon_id}, {len(polygon)} points")
@@ -562,12 +562,12 @@ class VideoAnnotationHandler():
         self.polygon_point_ids = []
         self.polygon_points = []
         self.polygon_line_id = None
-        print("[DEBUG] Alle Polygon-Elemente wurden gelöscht.")
+        #print("[DEBUG] Alle Polygon-Elemente wurden gelöscht.")
 
     def delete_all_bounding_boxes(self):
         self.gui.frame_canvas.delete("boundingbox")  # entfernt alle mit dem Tag "boundingbox"
         self.drawn_rect_ids = []
-        print("[DEBUG] Alle BoundingBox-Elemente wurden gelöscht.")
+        #print("[DEBUG] Alle BoundingBox-Elemente wurden gelöscht.")
 
 
 
@@ -641,15 +641,10 @@ class VideoAnnotationHandler():
                 )
                 self.polygon_point_ids.append(point_id)
 
-            # annotype_list = self._safe_parse_list(row.get('polygon_annotype'))
-            # # Prüfen, ob Index gültig ist
-            # if self.polygon_index < len(annotype_list):
-            #     annotype_list[self.polygon_index] = "manually"
-            # else:
-            #     print(f"[ERROR] polygon_index {self.polygon_index} out of range for polygon_annotype.")
+            polygon_annotype_list = self._safe_parse_list(row.get('polygon_annotype'))
+            polygon_annotype_list[self.polygon_index] = "manually"
+            self.gui.all_annotations.at[df_index, 'polygon_annotype'] = polygon_annotype_list
 
-            # # Die geänderte Liste zurückschreiben
-            # row['polygon_annotype'] = annotype_list
 
             # Polygon-Linie zeichnen
             self.redraw_polygon()
@@ -671,7 +666,7 @@ class VideoAnnotationHandler():
                     x1, y1, x2, y2 = coords
                     self.rect_start = (x1, y1)
                     self.rect_end = (x2, y2)
-                    self.create_resize_handles()  # funktioniert jetzt ohne Argumente
+                    self.create_resize_handles() 
                 else:
                     print(f"[ERROR] Unexpected coords for rect_id: {coords}")
                     return
@@ -1077,6 +1072,7 @@ class VideoAnnotationHandler():
             return
 
         frame_path = os.path.join(self.image_folder, self.current_frames[self.gui.current_frame_index])
+        self.frame_path = frame_path
         
         try:
             pil_frame = Image.open(frame_path)

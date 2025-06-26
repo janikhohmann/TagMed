@@ -41,6 +41,7 @@ class GalleryNavigator:
         self.good_2_go_mode = False  # Flag to indicate if good-to-go mode is active
 
         self.video_tracking = VideoTracking(self)
+        self.all_masks = []
 
 
 
@@ -237,7 +238,7 @@ class GalleryNavigator:
         self.header_label_video.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2)) 
 
         self.frame_canvas = tk.Canvas(frame_frame, bg="white", highlightthickness=0) 
-        self.frame_canvas.grid(row=1, column=0, sticky="nsew", padx=5, pady=(2, 5))
+        self.frame_canvas.grid(row=1, column=0, sticky="nsew")
 
         self.setup_video_bottom_frame(video_tab)
 
@@ -582,7 +583,7 @@ class GalleryNavigator:
         # Tracking-Dropdown
         self.tracking_type = tk.StringVar()
         tracking_dropdown = ttk.Combobox(tracker_controls_row, textvariable=self.tracking_type,
-                                        values=["Simple", "Advanced"], width=12)
+                                        values=["Simple", "SAM 2"], width=12)
         tracking_dropdown.pack(side="left", padx=5)
         tracking_dropdown.current(0)
 
@@ -669,4 +670,32 @@ class GalleryNavigator:
                 "There are already polygon annotations saved for this image. Please use only one annotation type per image.",
                 parent=self.patient_window
             )
+
+    def select_annotation_before_tracking_gui(self):
+            info = messagebox.showinfo(
+                "Tracking Error",
+                "Please select an annotation to be tracked.",
+                parent=self.patient_window
+            )
+
+    def delete_annotations_for_all_frames_question(self):
+
+        answer = messagebox.askyesno(
+            "Deleting all Annotations",
+            f"Do you really want to delete all Annotations for video {self.selected_video_index}?",
+            parent=self.patient_window
+        )
+
+        if answer is True:
+            self.video_tracking.delete_all_annotations_for_one_video()
+
+    def ask_for_sam2_download(self):
+        answer = messagebox.askyesno(
+            "Downloading SAM2",
+            f"The SAM2 model is not yet loaded. Should this model be loaded?",
+            parent=self.patient_window
+        )
+        
+        return answer
+
 
