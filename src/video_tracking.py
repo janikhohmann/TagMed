@@ -17,11 +17,14 @@ import matplotlib.pyplot as plt
 
 from config_handler import ConfigHandler
 from video_annotation_handler import VideoAnnotationHandler
+from mask_handler import MaskHandler
 
 class  VideoTracking:
     def __init__(self, gui):
         self.gui = gui
         self.video_annotation_handler = VideoAnnotationHandler(gui)
+
+        self.mask_handler = MaskHandler()
         
         config = ConfigHandler()
         self.selected_image_folder = config.get("selected_image_folder")
@@ -91,9 +94,6 @@ class  VideoTracking:
         selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
         is_polygon = "Polygon" in selected_text
 
-        print(selected_text)
-
-
         # ==== Polygon Tracking ====
         if is_polygon:
             # get polygon data from data frame
@@ -110,23 +110,36 @@ class  VideoTracking:
             if not isinstance(polygon, list) or len(polygon) < 3:
                 print("[ERROR] Invalid polygon data.")
                 return
-            
+
             try:
                 for i in range(current_frame_index + 1, len(current_frames)):
-                    next_img_id = current_frames[i].split(".")[0] # get the next frame
+                    next_img_id = current_frames[i].split(".")[0]
 
-                    # searching for match for the next frame
                     match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == next_img_id
                     if match_next.any():
                         next_df_index = self.gui.all_annotations[match_next].index[0]
 
-                        #polygon_copy = [point.copy() for point in self.polygon_points]
-                        self.gui.all_annotations.at[next_df_index, 'polygon'] = self._append_or_init_list(
-                            self.gui.all_annotations.at[next_df_index, 'polygon'], polygon)
-                        self.gui.all_annotations.at[next_df_index, 'class_polygon'] = self._append_or_init_list(
-                            self.gui.all_annotations.at[next_df_index, 'class_polygon'], polygon_class)
-                        self.gui.all_annotations.at[next_df_index, 'polygon_annotype'] = self._append_or_init_list(
-                            self.gui.all_annotations.at[next_df_index, 'polygon_annotype'], "tracking")
+                        existing_polygons = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'polygon'])
+                        existing_class_polygons = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'class_polygon'])
+                        existing_polygon_annotypes = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'polygon_annotype'])
+
+                        # Stelle sicher, dass die Listen lang genug sind
+                        while len(existing_polygons) <= selected_annotation_index:
+                            existing_polygons.append([])
+                            existing_class_polygons.append("")
+                            existing_polygon_annotypes.append("")
+
+                        # Setze an der passenden Stelle
+                        existing_polygons[selected_annotation_index] = polygon
+                        existing_class_polygons[selected_annotation_index] = polygon_class
+                        existing_polygon_annotypes[selected_annotation_index] = "tracking"
+
+                        # Speichere die aktualisierten Listen zurück
+                        self.gui.all_annotations.at[next_df_index, 'polygon'] = existing_polygons
+                        self.gui.all_annotations.at[next_df_index, 'class_polygon'] = existing_class_polygons
+                        self.gui.all_annotations.at[next_df_index, 'polygon_annotype'] = existing_polygon_annotypes
+
+
                 print("[INFO] Simple Tracking Method Completed")
 
             except:
@@ -136,7 +149,7 @@ class  VideoTracking:
         # ==== Bounding Box Tracking ====        
         else:
 
-            # get bounding box data from data frame
+            # get original bounding box data from data frame
             x_list = self._safe_parse_list(row.get('x'))
             y_list = self._safe_parse_list(row.get('y'))
             w_list = self._safe_parse_list(row.get('w'))
@@ -149,7 +162,7 @@ class  VideoTracking:
                 y = y_list[selected_annotation_index]
                 w = w_list[selected_annotation_index]
                 h = h_list[selected_annotation_index]
-                slected_class = class_list[selected_annotation_index]
+                selected_class = class_list[selected_annotation_index]
                 #annotype = annotype_list[selected_annotation_index]
 
             except IndexError:
@@ -167,8 +180,21 @@ class  VideoTracking:
                     if match_next.any():
                         next_df_index = self.gui.all_annotations[match_next].index[0]
 
-                        for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [x, y, w, h, slected_class, 'tracking']):
-                            self.gui.all_annotations.at[next_df_index, col] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, col], val)
+                        for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [x, y, w, h, selected_class, 'tracking']):
+                            existing_list = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, col])
+
+                            # Stelle überschreiben, falls vorhanden, sonst auffüllen
+                            if len(existing_list) > selected_annotation_index:
+                                existing_list[selected_annotation_index] = val
+                            else:
+                                # Falls Liste zu kurz: mit None auffüllen und anhängen
+                                while len(existing_list) < selected_annotation_index:
+                                    existing_list.append(None)
+                                existing_list.append(val)
+
+                            self.gui.all_annotations.at[next_df_index, col] = existing_list
+
+                
                 print("[INFO] Simple Tracking Method Completed")
             except:
                 print("[ERROR] Simple Tracking Method could not be finished.")
@@ -260,9 +286,6 @@ class  VideoTracking:
         This should be called once during initialization.
         """
 
-        import sam2
-        print(f"SAM2 Version: {sam2.__version__ if hasattr(sam2, '__version__') else 'Unknown'}")
-
         try:
             from sam2.build_sam import build_sam2
             from sam2.sam2_image_predictor import SAM2ImagePredictor
@@ -272,7 +295,8 @@ class  VideoTracking:
             
             # ✅ VERWENDE NUR DIE CONFIG, OHNE CHECKPOINT (Nutzt vortrainierte Gewichte)
             config_path = "sam2_hiera_l"
-            checkoint_path = "/home/janik/Documents/scripts/annotation_pipeline_02/annotation/sam2_hiera_large.pt"  # Pfad zum Checkpoint
+            checkoint_path = "/home/janik/Documents/scripts/annotation_pipeline_02/annotation/sam2_hiera_large.pt"  
+            #checkoint_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/sam2.1_hiera_large.pt" # Pfad zum Checkpoint
             
             try:
                 # Erst mit Checkpoint versuchen
@@ -338,7 +362,7 @@ class  VideoTracking:
             y = y_list[selected_annotation_index]
             w = w_list[selected_annotation_index]
             h = h_list[selected_annotation_index]
-            slected_class = class_list[selected_annotation_index]
+            selected_class = class_list[selected_annotation_index]
 
             # Initial input box - convert x,y,w,h values into sam2 format x0, y0, x1, y1
             resize_h, resize_w = self.image_size
@@ -412,9 +436,24 @@ class  VideoTracking:
                 if match_next.any():
                     next_df_index = self.gui.all_annotations[match_next].index[0]
 
-                    for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [new_x, new_y, new_w, new_h, slected_class, 'tracking']):
-                        self.gui.all_annotations.at[next_df_index, col] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, col], val)
-            
+                    for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [new_x, new_y, new_w, new_h, selected_class, 'tracking']):
+                        existing_list = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, col])
+
+                        # Stelle überschreiben, falls vorhanden, sonst auffüllen
+                        if len(existing_list) > selected_annotation_index:
+                            existing_list[selected_annotation_index] = val
+                        else:
+                            # Falls Liste zu kurz: mit None auffüllen und anhängen
+                            while len(existing_list) < selected_annotation_index:
+                                existing_list.append(None)
+                            existing_list.append(val)
+
+                        self.gui.all_annotations.at[next_df_index, col] = existing_list
+
+                # save mask
+                path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
+                self.gui.all_annotations.at[next_df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, "masks"], path_mask)
+
 
             print(f"[INFO] SAM2 Tracking completed for {len(current_frames) - current_frame_index - 1} frames.")
 

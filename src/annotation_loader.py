@@ -139,27 +139,27 @@ class AnnotationLoader():
 
         
 
-    def sync_all_annotations_w_pat_annotations(self):
-        '''
-        Synchronizes self.annotations_filtered back to self.all_internal_annotation_data.
-        Replaces all annotations of the current patient/exam in the large list.
-        '''
-        try:
-            selected_pat = str(self.patient_id)
-            selected_exam = str(self.selected_exam)
+    # def sync_all_annotations_w_pat_annotations(self):
+    #     '''
+    #     Synchronizes self.annotations_filtered back to self.all_internal_annotation_data.
+    #     Replaces all annotations of the current patient/exam in the large list.
+    #     '''
+    #     try:
+    #         selected_pat = str(self.patient_id)
+    #         selected_exam = str(self.selected_exam)
 
-            # delete old annotations for patient and exam in self.all_internal_annotation_data
-            self.all_internal_annotation_data = [
-                ann for ann in self.all_internal_annotation_data
-                if not (str(ann.get("pat_ID")) == selected_pat and str(ann.get("exam_ID")) == selected_exam)
-            ]
+    #         # delete old annotations for patient and exam in self.all_internal_annotation_data
+    #         self.all_internal_annotation_data = [
+    #             ann for ann in self.all_internal_annotation_data
+    #             if not (str(ann.get("pat_ID")) == selected_pat and str(ann.get("exam_ID")) == selected_exam)
+    #         ]
         
-            # replace deleted annotations with new ones
-            self.all_internal_annotation_data.extend(self.annotations_filtered)
+    #         # replace deleted annotations with new ones
+    #         self.all_internal_annotation_data.extend(self.annotations_filtered)
 
 
-        except Exception as e:
-            print(f"Error syncing annotations for {selected_pat} in {selected_exam}: {e}")
+    #     except Exception as e:
+    #         print(f"Error syncing annotations for {selected_pat} in {selected_exam}: {e}")
 
 
     def create_default_anno_table(self):
@@ -202,6 +202,7 @@ class AnnotationLoader():
                     "file_type": file_type,
                     "bb_annotype": "NN",
                     "polygon_annotype": "NN",
+                    "masks": "NN",
                     "new_path": os.path.join(root, file)
                 })
 

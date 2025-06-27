@@ -41,8 +41,9 @@ class VideoAnnotationHandler():
         self.polygon_index = None
         self.is_drawing_polygon = False
 
-
+        # mask specific attributes
         self.drawn_mask_ids = []
+        self.mask_dir = "../masks"
 
         self.annotation_loader = AnnotationLoader()
 
