@@ -11,6 +11,9 @@ import cv2
 import numpy as np
 import hydra
 from hydra.core.global_hydra import GlobalHydra
+import matplotlib.pyplot as plt
+
+
 
 from config_handler import ConfigHandler
 from video_annotation_handler import VideoAnnotationHandler
@@ -225,26 +228,22 @@ class  VideoTracking:
                     os.remove(self.sam2_model_l_path)
                 return None
 
+
+
+
     # def load_sam2_model(self):
     #     """
-    #     Loads the SAM2 model and prepares the image predictor for SAM2 tracking.
+    #     Loads the SAM2 model and prepares the image predictor for advanced tracking.
     #     This should be called once during initialization.
     #     """
-
-    #     # needs to be fixed for unabhängige pfade
     #     try:
-    #         absolute_config_yaml_path = "/home/janik/Documents/scripts/TagMed/TagMed/models/sam2_hiera_l.yaml"
-
-    #         config_directory = os.path.dirname(absolute_config_yaml_path)
-    #         config_file_basename = os.path.basename(absolute_config_yaml_path)
-    #         config_name_for_hydra, _ = os.path.splitext(config_file_basename) # z.B. "sam2_hiera_l"
-
     #         config_path = "sam2_hiera_l"  # Passe den Pfad ggf. an
-    #         config_file = "/home/janik/Documents/scripts/TagMed/TagMed/models/sam2_hiera_l.yaml"
+    #         checkpoint_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/sam2.1_hiera_large.pt"     # Passe den Pfad ggf. an
     #         device = "cuda" if torch.cuda.is_available() else "cpu"
     #         print(f"[INFO] Loading SAM2 model on {device}")
 
-    #         model = build_sam2(config_file=config_name_for_hydra, mode_path=self.sam2_model_l_path, device=device)
+    #         #config = OmegaConf.load(config_path)
+    #         model = build_sam2(config_path, checkpoint_path, device=device)
 
     #         self.sam2_predictor = SAM2ImagePredictor(model)
     #         print("[INFO] SAM2 model successfully loaded.")
@@ -253,32 +252,49 @@ class  VideoTracking:
     #         import traceback
     #         print("[ERROR] Failed to load SAM2 model:")
     #         traceback.print_exc()
-    #         self.sam2_predictor = None
+            self.sam2_predictor = None
 
+    def load_sam2_model(self):
+        """
+        Loads the SAM2 model and prepares the image predictor for advanced tracking.
+        This should be called once during initialization.
+        """
 
-    def load_sam2_video_model(self):
-        """Lädt das SAM2 Video-Modell für Tracking"""
+        import sam2
+        print(f"SAM2 Version: {sam2.__version__ if hasattr(sam2, '__version__') else 'Unknown'}")
+
         try:
-            from sam2.build_sam import build_sam2_video_predictor
+            from sam2.build_sam import build_sam2
             from sam2.sam2_image_predictor import SAM2ImagePredictor
             
-            model_cfg = "/home/janik/Documents/scripts/TagMed/TagMed/models/sam2_hiera_l.yaml"
-            sam2_checkpoint = "/home/janik/Documents/scripts/TagMed/TagMed/models/sam2.1_hiera_large.pt"
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"[INFO] Loading SAM2 model on {device}")
             
-            # Image Predictor für initiale Maske
-            self.sam2_image_predictor = SAM2ImagePredictor(build_sam2_video_predictor(model_cfg, sam2_checkpoint))
+            # ✅ VERWENDE NUR DIE CONFIG, OHNE CHECKPOINT (Nutzt vortrainierte Gewichte)
+            config_path = "sam2_hiera_l"
+            checkoint_path = "/home/janik/Documents/scripts/annotation_pipeline_02/annotation/sam2_hiera_large.pt"  # Pfad zum Checkpoint
             
-            # Video Predictor für Tracking
-            self.sam2_video_predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
-            
-            print("[INFO] SAM2 Video model successfully loaded.")
-            
+            try:
+                # Erst mit Checkpoint versuchen
+                model = build_sam2(config_path, checkoint_path, device=device)
+                print("[INFO] Model loaded with checkpoint (using default weights)")
+            except:
+                # Falls das nicht funktioniert, versuche ohne dem Checkpoint
+                model = build_sam2(config_path, None, device=device)
+                print("[INFO] Model loaded without checkpoint")
+
+            self.sam2_predictor = SAM2ImagePredictor(model)
+            print("[INFO] SAM2 model successfully loaded.")
+
         except Exception as e:
-            print(f"[ERROR] Failed to load SAM2 Video model: {e}")
+            import traceback
+            print(f"[ERROR] Failed to load SAM2 model: {e}")
+            traceback.print_exc()
+            self.sam2_predictor = None
 
 
             
-    def sam_2_tracking_method(self):
+    def sam2_tracking_method(self):
         """
         Uses SAM2 to propagate a bounding box across all following video frames.
         FIXED VERSION - removes critical bugs from previous implementation.
@@ -340,7 +356,7 @@ class  VideoTracking:
             return
 
         try:
-            for i in range(current_frame_index + 1, len(current_frames)):
+            for i in range(current_frame_index + 1 , len(current_frames)):
                 next_img_id = current_frames[i].split(".")[0]
                 frame_path = os.path.join(
                     self.selected_image_folder, 
@@ -349,7 +365,6 @@ class  VideoTracking:
                     current_frames[i]
                 )
                 
-                print(f"[DEBUG] Processing frame {i}: {next_img_id}")
 
                 image_bgr = cv2.imread(frame_path)
                 if image_bgr is None:
@@ -360,12 +375,12 @@ class  VideoTracking:
                 image_bgr = cv2.resize(image_bgr, (resize_w, resize_h))
                 image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-                # height, width = image_bgr.shape[:2]
-                # print(f"[DEBUG] Frame {next_img_id} loaded with shape: {image_bgr.shape}")
+
                 predictor.set_image(image_rgb)
 
                 try:
-                    masks = predictor.predict(box=input_box, multimask_output=False)
+                    masks, iou_preds, low_res_masks = predictor.predict(box=input_box, multimask_output=False)
+            
                     if masks[0].sum() == 0:
                         print(f"[INFO] No segmentation for frame {next_img_id}")
                         continue
@@ -373,65 +388,34 @@ class  VideoTracking:
                     print(f"[ERROR] SAM2 failed on frame {next_img_id}: {e}")
                     continue
 
-                print(f"[DEBUG] predictor.predict result: {masks}")
-
-
+                #mask_cropped = crop_mask_to_box(mask, input_box)
+                #self.show_debug_visuals(image_rgb, input_box, mask, binary_mask)
                 mask = masks[0]
-                
-                # 🎯 ERST prüfen ob die ursprüngliche Maske nicht leer ist
-                ys_orig, xs_orig = np.where(mask.squeeze())
-                
-                if len(xs_orig) == 0 or len(ys_orig) == 0:
-                    print(f"[WARN] Empty original mask for frame {frame_file}")
-                    continue
-                
-                # Dann filtern auf relevanten Bereich
-                margin = 50
-                x1 = max(0, int(x - margin))
-                y1 = max(0, int(y - margin)) 
-                x2 = min(mask.shape[1], int(x + w + margin))
-                y2 = min(mask.shape[0], int(y + h + margin))
-                
-                # Erstelle gefilterte Maske
-                filtered_mask = np.zeros_like(mask)
-                filtered_mask[y1:y2, x1:x2] = mask[y1:y2, x1:x2]
-                
-                # Verwende die gefilterte Maske
-                ys, xs = np.where(filtered_mask.squeeze())
-                
-                # Falls gefilterte Maske leer ist, verwende die ursprüngliche
-                if len(xs) == 0 or len(ys) == 0:
-                    print(f"[DEBUG] Filtered mask empty, using original mask")
-                    ys, xs = ys_orig, xs_orig
 
-                # Calculate new bounding box
+                ys, xs = np.where(mask.squeeze())
+
+                if len(xs) == 0 or len(ys) == 0:
+                    print(f"[INFO] Empty mask on frame {frame_file}")
+                    continue
+
+                # get new predicted bounding box values and convert it from x0, y0, x1, y1 into x,y,w,h format
                 x0, y0 = xs.min(), ys.min()
                 x1, y1 = xs.max(), ys.max()
                 new_x, new_y, new_w, new_h = self.corners_to_center(x0, y0, x1, y1)
-                
-                print(f"[DEBUG] Frame {next_img_id}: New bbox: x={new_x}, y={new_y}, w={new_w}, h={new_h}")
 
-                # CRITICAL FIX: Update input_box for next frame!
-                input_box = self.center_to_corners(new_x, new_y, new_w, new_h)
+                input_box = np.array([x0, y0, x1, y1], dtype=np.float32)
 
-                # Save annotation to DataFrame
+
+
+                # searching for match for the next frame
                 match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == next_img_id
                 if match_next.any():
                     next_df_index = self.gui.all_annotations[match_next].index[0]
 
-                    for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], 
-                                      [new_x, new_y, new_w, new_h, slected_class, 'tracking']):
-                        self.gui.all_annotations.at[next_df_index, col] = self._append_or_init_list(
-                            self.gui.all_annotations.at[next_df_index, col], val)
+                    for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [new_x, new_y, new_w, new_h, slected_class, 'tracking']):
+                        self.gui.all_annotations.at[next_df_index, col] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, col], val)
+            
 
-                # Optional: Save mask
-                # if hasattr(self.gui, 'all_masks'):
-                #     mask_uint8 = (mask_binary.astype(np.uint8)) * 255
-                #     self.gui.all_masks.append({
-                #         'img_ID': next_img_id,
-                #         'mask': mask_uint8
-                #     })
-                break
             print(f"[INFO] SAM2 Tracking completed for {len(current_frames) - current_frame_index - 1} frames.")
 
         except Exception as e:
@@ -439,33 +423,43 @@ class  VideoTracking:
             import traceback
             traceback.print_exc()
 
-    def extract_relevant_mask_region(self, mask, current_box, margin=20):
+
+    def show_debug_visuals(self, image_rgb, input_box, mask, mask_cropped):
         """
-        Extrahiert nur den relevanten Bereich der Maske um die aktuelle Bounding Box.
-        
-        Args:
-            mask: Die vollständige SAM2-Maske
-            current_box: Aktuelle Bounding Box [x, y, w, h]
-            margin: Zusätzlicher Rand um die Box
-        
-        Returns:
-            Gefilterte Maske mit nur dem relevanten Bereich
+        Zeigt vier nebeneinander angeordnete Bilder:
+        1. Originalbild
+        2. Originalbild mit Input-Box
+        3. Maske (Rohdaten)
+        4. Binarisierte Maske
         """
-        x, y, w, h = current_box
-        
-        # Erweitere die Box um einen Margin
-        x1 = max(0, x - margin)
-        y1 = max(0, y - margin)
-        x2 = min(mask.shape[1], x + w + margin)
-        y2 = min(mask.shape[0], y + h + margin)
-        
-        # Erstelle eine leere Maske
-        filtered_mask = np.zeros_like(mask)
-        
-        # Kopiere nur den relevanten Bereich
-        filtered_mask[y1:y2, x1:x2] = mask[y1:y2, x1:x2]
-        
-        return filtered_mask
+        fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+
+        # Originalbild
+        axs[0].imshow(image_rgb)
+        axs[0].set_title("Original Image")
+        axs[0].axis('off')
+
+        # Bild mit Box
+        image_with_box = image_rgb.copy()
+        x0, y0, x1, y1 = map(int, input_box)
+        cv2.rectangle(image_with_box, (x0, y0), (x1, y1), (255, 0, 0), 2)  # Rotes Rechteck
+        axs[1].imshow(image_with_box)
+        axs[1].set_title("Image with Input Box")
+        axs[1].axis('off')
+
+        # Maske (grau)
+        axs[2].imshow(mask.squeeze(), cmap='gray')
+        axs[2].set_title("Raw Mask")
+        axs[2].axis('off')
+
+        # Binärmaske
+        binary_mask = (mask_cropped.squeeze() > 0.5).astype(np.uint8)
+        axs[3].imshow(binary_mask, cmap='gray')
+        axs[3].set_title("Cropped Mask")
+        axs[3].axis('off')
+
+        plt.tight_layout()
+        plt.show()
 
 
 

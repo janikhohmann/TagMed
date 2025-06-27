@@ -8,11 +8,15 @@ import statistics as stat
 import numpy as np
 
 from annotation_loader import AnnotationLoader
+from config_handler import ConfigHandler 
 
 
 class VideoAnnotationHandler():
     def __init__(self, gui):
         self.gui = gui
+
+        config = ConfigHandler()
+        self.image_size = config.get("image_size", (600, 600))  # Default image size if not set
 
         self.is_drawing = False
         self.rect_start = None
@@ -1077,8 +1081,7 @@ class VideoAnnotationHandler():
         try:
             pil_frame = Image.open(frame_path)
 
-            width = 600
-            height = 600
+            width, height = self.image_size
             pil_frame = pil_frame.resize((width, height), Image.Resampling.LANCZOS)
 
             self.tk_frame = ImageTk.PhotoImage(pil_frame)
