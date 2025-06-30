@@ -42,11 +42,11 @@ class MaskHandler:
 
         return mask_path
     
-    def delete_mask(self, image_id,  mask_class, mask_idx):
+    def delete_mask(self, mask_path):
         """
         Delete a mask file     
         """
-        mask_path = f"{self.mask_dir}/{image_id}_{mask_class}_{mask_idx}.npz"
+
         try:
             os.remove(mask_path)
             print(f"Mask file deleted: {mask_path}")

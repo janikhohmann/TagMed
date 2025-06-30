@@ -190,8 +190,15 @@ class VideoAnnotationHandler():
                 self.gui.all_annotations.at[idx, 'class_polygon'] = class_list if class_list else "NN"
                 self.gui.all_annotations.at[idx, 'polygon_annotype'] = annotype_list if annotype_list else "NN"
             else:
+                
+                # Delete Mask if it exists
+                mask_paths = self._safe_parse_list(self.gui.all_annotations.at[idx, 'masks'])
+                if index < len(mask_paths):
+                    path_to_remove = mask_paths[index]
+                self.mask_handler.delete_mask(path_to_remove)
+
                 # Entferne Bounding Box-Daten
-                for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype']:
+                for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype', 'masks']:
                     val = self._safe_parse_list(self.gui.all_annotations.at[idx, col])
                     if index < len(val):
                         val.pop(index)
@@ -666,9 +673,14 @@ class VideoAnnotationHandler():
                 # bb_annotype als Liste parsen
                 bbox_annotype_list = self._safe_parse_list(row.get('bb_annotype'))
 
-
                 bbox_annotype_list[self.listbox_index] = "manually"
                 self.gui.all_annotations.at[df_index, 'bb_annotype'] = bbox_annotype_list
+
+                # Delete Mask if it exists
+                mask_paths = self._safe_parse_list(self.gui.all_annotations.at[idx, 'masks'])
+                if index < len(mask_paths):
+                    path_to_remove = mask_paths[index]
+                self.mask_handler.delete_mask(path_to_remove)
 
                 if len(coords) == 4:
                     x1, y1, x2, y2 = coords
