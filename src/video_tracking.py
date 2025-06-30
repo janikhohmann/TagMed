@@ -380,7 +380,8 @@ class  VideoTracking:
             return
 
         try:
-            for i in range(current_frame_index + 1 , len(current_frames)):
+            # create a mask for all following images
+            for i in range(current_frame_index , len(current_frames)):
                 next_img_id = current_frames[i].split(".")[0]
                 frame_path = os.path.join(
                     self.selected_image_folder, 
@@ -412,48 +413,51 @@ class  VideoTracking:
                     print(f"[ERROR] SAM2 failed on frame {next_img_id}: {e}")
                     continue
 
-                #mask_cropped = crop_mask_to_box(mask, input_box)
-                #self.show_debug_visuals(image_rgb, input_box, mask, binary_mask)
                 mask = masks[0]
 
-                ys, xs = np.where(mask.squeeze())
+                if i != current_frame_index: # skip the first frame because we dont want to create another bounding box
+                    ys, xs = np.where(mask.squeeze())
 
-                if len(xs) == 0 or len(ys) == 0:
-                    print(f"[INFO] Empty mask on frame {frame_file}")
-                    continue
+                    if len(xs) == 0 or len(ys) == 0:
+                        print(f"[INFO] Empty mask on frame {current_frame_index}")
+                        continue
 
-                # get new predicted bounding box values and convert it from x0, y0, x1, y1 into x,y,w,h format
-                x0, y0 = xs.min(), ys.min()
-                x1, y1 = xs.max(), ys.max()
-                new_x, new_y, new_w, new_h = self.corners_to_center(x0, y0, x1, y1)
+                    # get new predicted bounding box values and convert it from x0, y0, x1, y1 into x,y,w,h format
+                    x0, y0 = xs.min(), ys.min()
+                    x1, y1 = xs.max(), ys.max()
+                    new_x, new_y, new_w, new_h = self.corners_to_center(x0, y0, x1, y1)
 
-                input_box = np.array([x0, y0, x1, y1], dtype=np.float32)
+                    input_box = np.array([x0, y0, x1, y1], dtype=np.float32)
 
 
 
-                # searching for match for the next frame
-                match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == next_img_id
-                if match_next.any():
-                    next_df_index = self.gui.all_annotations[match_next].index[0]
+                    # searching for match for the next frame
+                    match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == next_img_id
+                    if match_next.any():
+                        next_df_index = self.gui.all_annotations[match_next].index[0]
 
-                    for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [new_x, new_y, new_w, new_h, selected_class, 'tracking']):
-                        existing_list = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, col])
+                        for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [new_x, new_y, new_w, new_h, selected_class, 'tracking']):
+                            existing_list = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, col])
 
-                        # Stelle überschreiben, falls vorhanden, sonst auffüllen
-                        if len(existing_list) > selected_annotation_index:
-                            existing_list[selected_annotation_index] = val
-                        else:
-                            # Falls Liste zu kurz: mit None auffüllen und anhängen
-                            while len(existing_list) < selected_annotation_index:
-                                existing_list.append(None)
-                            existing_list.append(val)
+                            # Stelle überschreiben, falls vorhanden, sonst auffüllen
+                            if len(existing_list) > selected_annotation_index:
+                                existing_list[selected_annotation_index] = val
+                            else:
+                                # Falls Liste zu kurz: mit None auffüllen und anhängen
+                                while len(existing_list) < selected_annotation_index:
+                                    existing_list.append(None)
+                                existing_list.append(val)
 
-                        self.gui.all_annotations.at[next_df_index, col] = existing_list
+                            self.gui.all_annotations.at[next_df_index, col] = existing_list
 
-                # save mask
-                path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
-                self.gui.all_annotations.at[next_df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, "masks"], path_mask)
-
+                    # save mask
+                    path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
+                    self.gui.all_annotations.at[next_df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, "masks"], path_mask)
+                
+                else: # save the first frame mask
+                    path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
+                    self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[df_index, "masks"], path_mask)
+                   
 
             print(f"[INFO] SAM2 Tracking completed for {len(current_frames) - current_frame_index - 1} frames.")
 
