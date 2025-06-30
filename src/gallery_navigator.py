@@ -11,7 +11,7 @@ from medical_record_loader import MedicalRecordLoader
 from img_annotation_handler import ImgAnnotationHandler
 from video_annotation_handler import VideoAnnotationHandler
 from video_tracking import VideoTracking
-
+from mask_handler import MaskHandler
 
 class GalleryNavigator:
     def __init__(self, root):
@@ -41,7 +41,11 @@ class GalleryNavigator:
         self.good_2_go_mode = False  # Flag to indicate if good-to-go mode is active
 
         self.video_tracking = VideoTracking(self)
+
+        self.mask_handler = MaskHandler(self)  
         self.all_masks = []
+        self.drawn_mask_ids = []
+        self.mask_dir = "../masks"
 
 
 
@@ -592,12 +596,12 @@ class GalleryNavigator:
                                          command=self.video_tracking.tracking_starter)
         start_tracker_button.pack(side="left", padx=5)
 
-        # Masken-Checkbox
+        # # Masken-Checkbox
         self.mask_toggle_button = ttk.Checkbutton(
             tracker_controls_row,
             text="Show Masks",
             variable=self.masks_visible,
-            command=self.video_annotation_handler.toggle_mask_visibility
+            command=self.toggle_mask_visibility
         )
         self.mask_toggle_button.pack(side="left", padx=5)
 
@@ -697,5 +701,14 @@ class GalleryNavigator:
         )
         
         return answer
+
+    def toggle_mask_visibility(self):
+
+        if self.masks_visible.get():
+            print("[DEBUG] Masks will be shown.")
+            self.mask_handler.load_masks_for_frame()
+        else:
+            print("[DEBUG] Mask will not be shown.")
+            self.mask_handler.clear_all_masks()
 
 

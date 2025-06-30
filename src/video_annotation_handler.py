@@ -9,6 +9,7 @@ import numpy as np
 
 from annotation_loader import AnnotationLoader
 from config_handler import ConfigHandler 
+from mask_handler import MaskHandler
 
 
 class VideoAnnotationHandler():
@@ -17,6 +18,8 @@ class VideoAnnotationHandler():
 
         config = ConfigHandler()
         self.image_size = config.get("image_size", (600, 600))  # Default image size if not set
+
+        self.annotation_loader = AnnotationLoader()
 
         self.is_drawing = False
         self.rect_start = None
@@ -42,10 +45,9 @@ class VideoAnnotationHandler():
         self.is_drawing_polygon = False
 
         # mask specific attributes
-        self.drawn_mask_ids = []
-        self.mask_dir = "../masks"
+        self.mask_handler = MaskHandler(self)
 
-        self.annotation_loader = AnnotationLoader()
+
 
     def add_annotation(self):
         img_selected_class = self.gui.video_selected_class.get()
@@ -235,6 +237,7 @@ class VideoAnnotationHandler():
 
         current_image_id = self.gui.current_frames[self.gui.current_frame_index].split(".")[0]
         self.current_image_id = current_image_id
+        #self.gui.current_frame_id = current_image_id
 
         print(f"[DEBUG] Handler: Loading annotations for image_id: '{self.current_image_id }'")
 
@@ -893,71 +896,6 @@ class VideoAnnotationHandler():
 
 
 
-    def load_masks_for_frame(self):
-        """Load masks for the selected frame into canvas."""
-        self.clear_all_masks()
-
-        found_count = 0 
-
-        if self.gui.masks_visible.get():
-            for index, mask_entry in enumerate(self.gui.all_masks):
-                mask_img_id = mask_entry.get('img_ID', 'MISSING_ID')
-
-                if str(mask_img_id).strip() == str(self.current_image_id ).strip():
-                    found_count += 1
-
-                    try:
-                        mask_array = mask_entry['mask']  # uint8 NumPy-Array, value 0 or 255
-
-                        # Create RGBA-Bild from mask
-                        height, width = mask_array.shape
-                        red_color = (255, 0, 0, 60)  # bright, transparent red (alpha=60/255)
-                        rgba_array = np.zeros((height, width, 4), dtype=np.uint8)
-
-                        rgba_array[mask_array > 0] = red_color  # only fill mask
-
-                        # Convert in  in PIL-Image then in PhotoImage
-                        pil_image = Image.fromarray(rgba_array, mode="RGBA")
-                        tk_image = ImageTk.PhotoImage(pil_image)
-
-                        # Show Image on Canvas
-                        mask_id = self.gui.frame_canvas.create_image(0, 0, anchor="nw", image=tk_image)
-
-                        # save reference
-                        if not hasattr(self.gui, 'mask_image_refs'):
-                            self.gui.mask_image_refs = []
-                        self.gui.mask_image_refs.append(tk_image)
-
-                        self.gui.all_masks[index]['mask_id'] = mask_id
-                        self.drawn_mask_ids.append(mask_id)
-
-                    except Exception as e:
-                        print(f"[ERROR] Failed to draw mask at index {index} (Error: {e}): {mask_entry}")
-                        self.gui.all_masks[index]['mask_id'] = None
-                        continue
-
-
-
-    def clear_all_masks(self):
-        """Clear all masks."""
-
-        for mask_id in self.drawn_mask_ids:
-            self.gui.frame_canvas.delete(mask_id)
-
-        self.drawn_mask_ids.clear()
-
-        if hasattr(self.gui, 'mask_image_refs'):
-            self.gui.mask_image_refs.clear()
-
-    def toggle_mask_visibility(self):
-
-        if self.gui.masks_visible.get():
-            print("[DEBUG] Masks will be shown.")
-            self.load_masks_for_frame()
-        else:
-            print("[DEBUG] Mask will not be shown.")
-            self.clear_all_masks()
-
     def update_video_listbox_with_annotation_colors(self):
         """
         Aktualisiert die Video-Listbox mit Hintergrundfarben abhängig vom Annotationsstatus.
@@ -1070,7 +1008,9 @@ class VideoAnnotationHandler():
         for rect_id in self.drawn_rect_ids:
             self.gui.frame_canvas.delete(rect_id)
         self.drawn_rect_ids.clear()
-        self.clear_all_masks()
+
+
+        self.mask_handler.clear_all_masks()
 
         
         if not hasattr(self, 'current_frames') or not self.current_frames:
@@ -1096,7 +1036,7 @@ class VideoAnnotationHandler():
 
             # Load annotations for the current frame
             self.load_annotations_for_frame()
-            self.load_masks_for_frame()
+            self.gui.toggle_mask_visibility()
             
             # Update frame label
             self.gui.frame_index_label.config(text=f"Frame {self.gui.current_frame_index + 1} / {len(self.current_frames)}")

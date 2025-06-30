@@ -24,7 +24,7 @@ class  VideoTracking:
         self.gui = gui
         self.video_annotation_handler = VideoAnnotationHandler(gui)
 
-        self.mask_handler = MaskHandler()
+        self.mask_handler = MaskHandler(gui)
         
         config = ConfigHandler()
         self.selected_image_folder = config.get("selected_image_folder")
