@@ -1095,5 +1095,4 @@ class VideoAnnotationHandler():
 
         self.redraw_polygon()
 
-        print("[INFO] Last polygon point deleted.")
 

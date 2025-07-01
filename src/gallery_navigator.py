@@ -729,3 +729,37 @@ class GalleryNavigator:
             print("[DEBUG] Using video_annotation_handler")
             self.video_annotation_handler.delete_last_polygon_point()
 
+    def wait_for_tracking_gui(self, on_complete=None):
+        """
+        shows spinner while tracking runs in background.
+        """
+
+        popup = tk.Toplevel()
+        popup.title("Tracking in progress")
+        popup.geometry("300x100")
+        popup.resizable(False, False)
+        popup.transient(self.patient_window)
+        popup.grab_set()
+
+        tk.Label(popup, text="Please wait... Your Annotation is being tracked").pack(pady=10)
+
+        spinner = ttk.Progressbar(popup, mode="indeterminate", length=250)
+        spinner.pack(pady=10)
+        spinner.start(10)
+
+        def worker():
+            try:
+                self.video_tracking.sam2_tracking_method()
+            finally:
+                def cleanup():
+                    spinner.stop()
+                    popup.destroy()
+                    if on_complete:
+                        on_complete()
+
+                self.patient_window.after(0, cleanup)
+
+        # Start the worker thread
+        threading.Thread(target=worker, daemon=True).start()
+
+

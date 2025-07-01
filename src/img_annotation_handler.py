@@ -1017,4 +1017,4 @@ class ImgAnnotationHandler:
 
         self.redraw_polygon()
 
-        print("[INFO] Last polygon point deleted.")
+

@@ -66,7 +66,8 @@ class  VideoTracking:
             available = self.check_if_sam_2_is_available() # option to download different models
 
             if available:
-                self.sam2_tracking_method()
+                #self.sam2_tracking_method()
+                self.gui.wait_for_tracking_gui(on_complete=None)
             else:
                 return
 
