@@ -43,6 +43,7 @@ class VideoAnnotationHandler():
         self.listbox_index = None
         self.polygon_index = None
         self.is_drawing_polygon = False
+        self.dragging_polygon = False
 
         # mask specific attributes
         self.mask_handler = MaskHandler(self)

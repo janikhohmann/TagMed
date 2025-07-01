@@ -346,11 +346,152 @@ class  VideoTracking:
             self.load_sam2_model()
         predictor = self.sam2_predictor
 
-        if is_polygon:
-            print("[INFO] Polygon tracking not supported with SAM2")
-            return
+        resize_h, resize_w = self.image_size
 
-        # get bounding box data from data frame
+        # ===== POLYGON TRACKING =====
+        if is_polygon:
+            print("[INFO] Starting SAM2 polygon tracking...")
+    
+            
+            # Get polygon data from dataframe
+            try:
+                polygon_list = self._safe_parse_list(row.get('polygon'))
+                polygon_class_list = self._safe_parse_list(row.get('class_polygon'))
+                
+                # if selected_annotation_index >= len(polygon_list):
+                #     print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
+                #     return
+                    
+                polygon = polygon_list[selected_annotation_index]
+                selected_class = polygon_class_list[selected_annotation_index]
+
+                
+                if not isinstance(polygon, list) or len(polygon) < 3:  # Mindestens 3 Punkte (x,y pairs)
+                    print("[ERROR] Invalid polygon data - need at least 3 points.")
+                    return
+                    
+                initial_polygon_mask = self._polygon_to_mask(polygon, resize_w, resize_h).squeeze()
+                calculated_polygon = self._mask_to_polygon(initial_polygon_mask)
+
+
+            except IndexError:
+                print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
+                return
+
+            try:
+                # POLYGON TRACKING LOOP
+
+                expected_size = (256, 256)  # oder (1024, 1024), je nach SAM2 Modell
+
+                # Resize maske
+                previous_mask = cv2.resize(
+                    initial_polygon_mask.squeeze().astype(np.uint8),
+                    expected_size,
+                    interpolation=cv2.INTER_NEAREST
+                )
+
+                # previous_mask = initial_polygon_mask
+                print(f"previous_mask shape: {previous_mask.shape}")
+                previous_mask = previous_mask[None, :, :]  # Von [H,W] zu [1,H,W]
+                
+                for i in range(current_frame_index, len(current_frames)):
+                    next_img_id = current_frames[i].split(".")[0]
+                    frame_path = os.path.join(
+                        self.selected_image_folder, 
+                        self.gui.patient_id, 
+                        self.gui.selected_exam, 
+                        current_frames[i]
+                    )
+                    
+
+                    image_bgr = cv2.imread(frame_path)
+                    if image_bgr is None:
+                        print(f"[WARN] Could not read image: {frame_path}")
+                        continue
+                        
+                    image_bgr = cv2.resize(image_bgr, (resize_w, resize_h))
+                    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+                    print(f"image shape vor set image: {image_rgb.shape}")
+
+                    predictor.set_image(image_rgb)
+
+                    print(f"previous_mask shape: {previous_mask.shape}")
+                    print(f"image shape: {image_rgb.shape}")
+
+
+                    try:
+                        masks, iou_preds, low_res_masks = predictor.predict(mask_input=previous_mask, multimask_output=False)
+                
+                        if masks[0].sum() == 0:
+                            print(f"[INFO] No segmentation for frame {next_img_id}")
+                            continue
+                    except Exception as e:
+                        print(f"[ERROR] SAM2 failed on frame {next_img_id}: {e}")
+                        continue
+
+                    mask = masks[0]
+                    gerated_polygon = self._mask_to_polygon(mask.squeeze())
+
+                    # Update previous mask for next iteration
+                    previous_mask = mask
+                    previous_mask = cv2.resize(
+                        initial_polygon_mask.squeeze().astype(np.uint8),
+                        expected_size,
+                        interpolation=cv2.INTER_NEAREST)
+                    previous_mask = previous_mask[None, :, :]  
+
+                    if i != current_frame_index: # skip the first frame because we dont want to create another bounding box
+                        ys, xs = np.where(mask.squeeze())
+
+                        if len(xs) == 0 or len(ys) == 0:
+                            print(f"[INFO] Empty mask on frame {next_img_id}")
+                            continue
+
+                        # searching for match for the next frame
+                        match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == next_img_id
+                        if match_next.any():
+                            next_df_index = self.gui.all_annotations[match_next].index[0]
+
+                            # Get existing polygon data
+                            existing_polygons = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'polygon'])
+                            existing_class_polygons = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'class_polygon'])
+                            existing_polygon_annotypes = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'polygon_annotype'])
+                            
+                            # Ensure lists are long enough
+                            while len(existing_polygons) <= selected_annotation_index:
+                                existing_polygons.append([])
+                                existing_class_polygons.append("")
+                                existing_polygon_annotypes.append("")
+                            
+                            # Update at the specific index
+                            existing_polygons[selected_annotation_index] = gerated_polygon
+                            existing_class_polygons[selected_annotation_index] = selected_class
+                            existing_polygon_annotypes[selected_annotation_index] = "tracking"
+                            
+                            # Save back to dataframe
+                            self.gui.all_annotations.at[next_df_index, 'polygon'] = existing_polygons
+                            self.gui.all_annotations.at[next_df_index, 'class_polygon'] = existing_class_polygons
+                            self.gui.all_annotations.at[next_df_index, 'polygon_annotype'] = existing_polygon_annotypes
+                    
+                        # save mask for all following frames
+                        path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
+                        self.gui.all_annotations.at[next_df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, "masks"], path_mask)
+                    
+                    else: # save the first frame mask
+                        path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
+                        self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[df_index, "masks"], path_mask)
+
+                print(f"[INFO] SAM2 Polygon Tracking completed for {len(current_frames) - current_frame_index} frames.")
+                return  # Exit after polygon tracking
+
+            except Exception as e:
+                print(f"[ERROR] SAM2 Polygon Tracking could not be finished: {e}")
+                import traceback
+                traceback.print_exc()
+                return
+
+        # ===== Bounding Box TRACKING =====
         try:
             x_list = self._safe_parse_list(row.get('x'))
             y_list = self._safe_parse_list(row.get('y'))
@@ -365,7 +506,7 @@ class  VideoTracking:
             selected_class = class_list[selected_annotation_index]
 
             # Initial input box - convert x,y,w,h values into sam2 format x0, y0, x1, y1
-            resize_h, resize_w = self.image_size
+
 
             scale_x = resize_w / 1280
             scale_y = resize_h / 960
@@ -419,7 +560,7 @@ class  VideoTracking:
                     ys, xs = np.where(mask.squeeze())
 
                     if len(xs) == 0 or len(ys) == 0:
-                        print(f"[INFO] Empty mask on frame {current_frame_index}")
+                        print(f"[INFO] Empty mask on frame {next_img_id}")
                         continue
 
                     # get new predicted bounding box values and convert it from x0, y0, x1, y1 into x,y,w,h format
@@ -450,7 +591,7 @@ class  VideoTracking:
 
                             self.gui.all_annotations.at[next_df_index, col] = existing_list
 
-                    # save mask
+                    # save mask for all following frames
                     path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
                     self.gui.all_annotations.at[next_df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, "masks"], path_mask)
                 
@@ -465,6 +606,9 @@ class  VideoTracking:
             print(f"[ERROR] SAM2 Tracking Method could not be finished: {e}")
             import traceback
             traceback.print_exc()
+
+
+
 
 
     def show_debug_visuals(self, image_rgb, input_box, mask, mask_cropped):
@@ -593,5 +737,61 @@ class  VideoTracking:
         x_center = int(x0 + w / 2)
         y_center = int(y0 + h / 2)
         return x_center, y_center, w, h
+
+    def _polygon_to_mask(self, polygon, width, height):
+        """
+        Converts a polygon (list of x,y coordinates) to a binary mask.
+        """
+        
+        # Convert polygon to numpy array and reshape
+        points = np.array(polygon).reshape(-1, 2).astype(np.int32)
+        
+        # Create empty mask
+        mask = np.zeros((height, width), dtype=np.uint8)
+        
+        # Fill polygon
+        cv2.fillPoly(mask, [points], 1)
+
+        return mask.astype(np.float32)
+
+
+    def _mask_to_polygon(self, binary_mask):
+        """
+        Converts a binary mask to a polygon (simplified contour).
+        Returns a list of tuples with (x, y) coordinates.
+        """
+        import cv2
+        
+        # Convert to uint8 if needed
+        if binary_mask.dtype != np.uint8:
+            mask_uint8 = (binary_mask * 255).astype(np.uint8)
+        else:
+            mask_uint8 = binary_mask
+        
+        # Find contours
+        contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if not contours:
+            return None
+        
+        # Get largest contour
+        largest_contour = max(contours, key=cv2.contourArea)
+        
+        # Simplify contour to reduce number of points
+        epsilon = 0.01 * cv2.arcLength(largest_contour, True)
+        simplified_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+        
+
+        polygon_points = []
+        for point in largest_contour:
+            x, y = point[0]  # OpenCV contour format: [[x, y]]
+            polygon_points.append((int(x), int(y)))
+
+        if len(polygon_points) > 0 and polygon_points[0] != polygon_points[-1]:
+            polygon_points.append(polygon_points[0])  # Ensure the polygon is closed by adding the first point at the end
+
+        print(len(polygon_points), "points in polygon")
+        
+        return polygon_points
 
  
