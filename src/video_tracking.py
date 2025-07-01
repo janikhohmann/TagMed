@@ -387,11 +387,7 @@ class  VideoTracking:
                 previous_mask = cv2.resize(
                     initial_polygon_mask.squeeze().astype(np.uint8),
                     expected_size,
-                    interpolation=cv2.INTER_NEAREST
-                )
-
-                # previous_mask = initial_polygon_mask
-                print(f"previous_mask shape: {previous_mask.shape}")
+                    interpolation=cv2.INTER_NEAREST)
                 previous_mask = previous_mask[None, :, :]  # Von [H,W] zu [1,H,W]
                 
                 for i in range(current_frame_index, len(current_frames)):
@@ -412,12 +408,7 @@ class  VideoTracking:
                     image_bgr = cv2.resize(image_bgr, (resize_w, resize_h))
                     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-                    print(f"image shape vor set image: {image_rgb.shape}")
-
                     predictor.set_image(image_rgb)
-
-                    print(f"previous_mask shape: {previous_mask.shape}")
-                    print(f"image shape: {image_rgb.shape}")
 
 
                     try:

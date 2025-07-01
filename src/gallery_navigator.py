@@ -64,6 +64,8 @@ class GalleryNavigator:
         self.patient_id = patient_id
 
         self.patient_window.protocol("WM_DELETE_WINDOW", self.saving_progress_question)
+        self.patient_window.bind("<Control-z>", lambda event: self.delete_last_polygon_point_manager())
+
 
         exams = self.annotation_loader.get_exams(patient_id)
         patient_annotations = self.annotation_loader.filter_annotations_for_patient(self.all_annotations, patient_id) # filter annotations for the patient from internal list
@@ -86,6 +88,8 @@ class GalleryNavigator:
         # Notebooks for gallery
         notebook = ttk.Notebook(patient_window)
         notebook.pack(fill="both", expand=True)
+        self.notebook = notebook
+
 
         """ 
         Set up the Imagetab with List of available Images, 
@@ -462,9 +466,6 @@ class GalleryNavigator:
         slider_frame.grid(row=1, column=3, sticky="nsew", padx=(10, 10), pady=0)
         slider_frame.grid_propagate(False)
 
-        # Optional: Referenz zum Frame speichern
-        self.bottom_frame = bottom_frame
-
 
     def setup_video_bottom_frame(self, parent):
         """
@@ -611,6 +612,9 @@ class GalleryNavigator:
 
 
 
+
+
+
     def on_slider_changed(self, value):
         """
         Triggered when slider is moved, updates current frame and image.
@@ -711,4 +715,17 @@ class GalleryNavigator:
             print("[DEBUG] Mask will not be shown.")
             self.mask_handler.clear_all_masks()
 
+    def delete_last_polygon_point_manager(self):
+        """
+        Deletes the last point of a polygon annotation.
+        """
+
+        current_tab = self.notebook.select()
+
+        if str(self.image_canvas).startswith(current_tab):
+            print("[DEBUG] Using img_annotation_handler")
+            self.img_annotation_handler.delete_last_polygon_point()
+        elif str(self.frame_canvas).startswith(current_tab):
+            print("[DEBUG] Using video_annotation_handler")
+            self.video_annotation_handler.delete_last_polygon_point()
 

@@ -1072,3 +1072,28 @@ class VideoAnnotationHandler():
             self.polygon_line_id = self.gui.frame_canvas.create_polygon(
                 flat_points, outline="blue", fill="", width=2, tags=(canvas_tag, "polygon")
                 )
+
+    def delete_last_polygon_point(self):
+        """
+        Deletes the last point of a polygon annotation from the canvas and internal state.
+        Triggered z.B. by Ctrl+Z.
+        """
+
+        if not self.polygon_points or not self.polygon_point_ids:
+            print("[INFO] No polygon point to delete.")
+            return
+
+        # Entferne den letzten Punkt aus der Canvas-Anzeige
+        last_id = self.polygon_point_ids.pop()
+        try:
+            self.gui.frame_canvas.delete(last_id)
+        except Exception as e:
+            print(f"[WARN] Could not delete canvas item: {e}")
+
+        # Entferne den Punkt aus der Koordinatenliste
+        self.polygon_points.pop()
+
+        self.redraw_polygon()
+
+        print("[INFO] Last polygon point deleted.")
+
