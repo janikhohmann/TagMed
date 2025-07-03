@@ -7,6 +7,7 @@ import ast
 from annotation_loader import AnnotationLoader
 from magic_wand import MagicWand
 from image_mask_predictor import ImageMaskPredictor
+from mask_handler import MaskHandler
 
 
 class ImgAnnotationHandler:
@@ -39,6 +40,7 @@ class ImgAnnotationHandler:
 
         self.annotation_loader = AnnotationLoader()
         self.image_mask_predictor = ImageMaskPredictor(gui)
+        self.mask_handler = MaskHandler(gui)
         self.magic_wand = MagicWand()
 
 
@@ -122,6 +124,11 @@ class ImgAnnotationHandler:
                 self.gui.all_annotations.at[idx, 'class_polygon'], img_selected_class)
             self.gui.all_annotations.at[idx, 'polygon_annotype'] = append_or_init_list(
                 self.gui.all_annotations.at[idx, 'polygon_annotype'], "manually")
+            
+            # safe new mask for polygon
+            if self.gui.create_mask_var.get():
+                width, height = self.gui.image_size
+                self.image_mask_predictor.predict_mask_for_image_polygon(idx, self.polygon_points.copy(), width, height)
 
             print(f"[DEBUG] Added Polygon with {len(self.polygon_points)} points")
 
@@ -204,12 +211,16 @@ class ImgAnnotationHandler:
                 polygons = self._safe_parse_list(row['polygon'])
                 if index < len(polygons):
                     is_polygon = True
+            
+            # get masks list
+            masks_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'masks'])
 
             if is_polygon:
                 # Entferne Polygon-Daten
                 polygons = self._safe_parse_list(self.gui.all_annotations.at[idx, 'polygon'])
                 class_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'class_polygon'])
                 annotype_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'polygon_annotype'])
+                
 
 
                 polygons.pop(index)
@@ -217,14 +228,24 @@ class ImgAnnotationHandler:
                     class_list.pop(index)
                 if index < len(annotype_list):
                     annotype_list.pop(index)
+                if index < len(masks_list): # delete mask if it exists
+                    mask_to_delete = masks_list[index]
+                    self.mask_handler.delete_mask(mask_to_delete)
+                    masks_list.pop(index)
 
                 self.gui.all_annotations.at[idx, 'polygon'] = polygons if polygons else "NN"
                 self.gui.all_annotations.at[idx, 'class_polygon'] = class_list if class_list else "NN"
                 self.gui.all_annotations.at[idx, 'polygon_annotype'] = annotype_list if annotype_list else "NN"
+                self.gui.all_annotations.at[idx, 'masks'] = masks_list if masks_list else "NN"
             else:
                 # Entferne Bounding Box-Daten
-                for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype']:
+                for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype', 'masks']:
                     val = self._safe_parse_list(self.gui.all_annotations.at[idx, col])
+
+                    if col == 'masks' and index < len(val):
+                        mask_to_delete = masks_list[index]
+                        self.mask_handler.delete_mask(mask_to_delete)
+
                     if index < len(val):
                         val.pop(index)
                     self.gui.all_annotations.at[idx, col] = val if val else "NN"
@@ -235,6 +256,8 @@ class ImgAnnotationHandler:
                 shape_id = self.drawn_rect_ids[index]
                 self.gui.image_canvas.delete(shape_id)
                 self.drawn_rect_ids.pop(index)
+            
+            self.mask_handler.clear_all_masks()  # Clear all masks from canvas
 
             # Resize-Handles löschen
             for handle in self.resize_handles:
@@ -876,6 +899,10 @@ class ImgAnnotationHandler:
             self.gui.img_annotation_listbox.insert(self.listbox_index, updated_text)
             self.gui.img_annotation_listbox.selection_set(self.listbox_index)
             self.gui.img_annotation_listbox.activate(self.listbox_index)
+
+            # safe new mask for polygon
+            width, height = self.gui.image_size
+            self.image_mask_predictor.predict_mask_for_image_polygon(None, self.polygon_points.copy(), width, height)
 
             print(f"[INFO] Updated Polygon annotation at index {self.polygon_index}")
             return

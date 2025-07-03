@@ -91,6 +91,35 @@ class ImageMaskPredictor:
         else:
             return path_mask
         
+    def predict_mask_for_image_polygon(self, df_index, polygon, width, height):
+        """
+        Converts a polygon (list of x,y coordinates) to a binary mask.
+        """
+        image_id = self.gui.selected_image_index.split(".")[0]
+
+        if not self.gui.img_annotation_listbox.curselection():
+            annotation_index = self.gui.img_annotation_listbox.size() - 1
+        else:
+            selected_annotation = self.gui.img_annotation_listbox.curselection()
+            annotation_index = selected_annotation[0]
+
+        # Convert polygon to numpy array and reshape
+        points = np.array(polygon).reshape(-1, 2).astype(np.int32)
+        
+        # Create empty mask
+        mask = np.zeros((height, width), dtype=np.uint8)
+        
+        # Fill polygon
+        cv2.fillPoly(mask, [points], 1)
+
+        path_mask = self.mask_handler.save_mask(mask, image_id, self.gui.img_selected_class.get(), annotation_index)
+
+        if not self.gui.img_annotation_listbox.curselection() and df_index is not None: # mask path only has to be updated if no annotation is selected in the listbox
+            self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[df_index, "masks"], path_mask)
+            return None 
+        else:
+            return path_mask
+        
 
 
 
