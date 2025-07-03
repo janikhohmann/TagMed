@@ -35,14 +35,14 @@ class GalleryNavigator:
         self.video_mode = False  # Flag to indicate if video mode is active
         self.modify_mode = tk.BooleanVar(value=False)  # Flag to indicate if modify mode is active
         self.bounding_box_mode = False  # Flag to indicate if bounding box mode is active
-        self.mask_mode = False  # Flag to indicate if mask mode is active
         self.masks_visible = tk.BooleanVar(value=False)  # Flag to indicate if masks are visible
         self.click_mode = False  # Flag to indicate if click mode is active
         self.good_2_go_mode = False  # Flag to indicate if good-to-go mode is active
 
         self.video_tracking = VideoTracking(self)
 
-        self.mask_handler = MaskHandler(self)  
+        self.mask_handler = MaskHandler(self)
+        self.create_mask_var = tk.BooleanVar(value=False)
         self.all_masks = []
         self.drawn_mask_ids = []
         self.mask_dir = "../masks"
@@ -326,6 +326,7 @@ class GalleryNavigator:
             print("Warning: self.img_annotation_handler not found.")
         
         self.img_annotation_handler.update_image_listbox_with_annotation_colors()
+        self.toggle_mask_visibility()
 
 
     def on_video_selected(self, event):
@@ -390,19 +391,20 @@ class GalleryNavigator:
         Setup for bottom frame - sets grid configuration, calls img_annotation_handler
         """
         bottom_frame = tk.Frame(parent, height=200, relief=tk.SUNKEN, borderwidth=1) # Etwas Relief zum Debuggen
-        bottom_frame.grid(row=1, column=0, columnspan=3, padx=2, pady=2, sticky="nsew")
+        bottom_frame.grid(row=1, column=0, columnspan=4, padx=2, pady=2, sticky="nsew")
 
         # Grid-Konfiguration für bottom_frame:
         # Spalte 0 (Dropdowns) und 1 (Buttons) haben feste Breite (weight=0)
         # Spalte 2 (Listbox) dehnt sich aus (weight=1)
         bottom_frame.grid_columnconfigure(0, weight=0)
         bottom_frame.grid_columnconfigure(1, weight=0)
-        bottom_frame.grid_columnconfigure(2, weight=1)
+        bottom_frame.grid_columnconfigure(2, weight=0)
+        bottom_frame.grid_columnconfigure(3, weight=0)  # Slider
         bottom_frame.grid_rowconfigure(1, weight=1) # Erlaubt der Listbox, sich vertikal auszudehnen
 
         # --- Header über den Steuerelementen ---
         header = tk.Label(bottom_frame, text="Annotation Properties", font=("Arial", 12, "bold"))
-        header.grid(row=0, column=0, columnspan=3, sticky="w", padx=5, pady=(10, 5))
+        header.grid(row=0, column=0, columnspan=4, sticky="w", padx=5, pady=(10, 5))
 
         # --- Spalte 0: Dropdowns ---
         dropdown_frame = tk.Frame(bottom_frame)
@@ -446,8 +448,7 @@ class GalleryNavigator:
         listbox_area_frame.grid_columnconfigure(0, weight=1)
         listbox_area_frame.grid_rowconfigure(1, weight=1)
 
-        tk.Label(listbox_area_frame, text="Objects:").grid(row=0, column=0, sticky="sw", padx=(0, 0))
-
+        tk.Label(listbox_area_frame, text="Objects:").grid(row=0, column=0, sticky="sw")
         self.img_annotation_listbox = tk.Listbox(listbox_area_frame, height=6, width=50, selectmode=tk.SINGLE)
         self.img_annotation_listbox.grid(row=1, column=0, sticky="nw", pady=(2, 0))
 
@@ -461,10 +462,36 @@ class GalleryNavigator:
         else:
             print("Warnung: self.image_canvas ist nicht initialisiert. Bindings nicht gesetzt.")
 
-        # Slider + zusätzliche Steuerungen (Spalte 3) - stays empty for images
+        # # Slider + zusätzliche Steuerungen (Spalte 3) - stays empty for images
         slider_frame = tk.Frame(bottom_frame, width=600, height=150)
-        slider_frame.grid(row=1, column=3, sticky="nsew", padx=(10, 10), pady=0)
+        slider_frame.grid(row=1, column=4, sticky="nsew", padx=(10, 10), pady=0)
         slider_frame.grid_propagate(False)
+
+
+        # Navigation Buttons unterhalb (links unten)
+        tracker_controls_row = tk.Frame(slider_frame)
+        tracker_controls_row.pack(side="bottom", anchor="w", fill="x", pady=(15, 10))
+
+        # Create Mask from Annotation Checkbox
+        self.create_mask_toggle_button = ttk.Checkbutton(
+            tracker_controls_row,
+            text="Create Mask from Annotation",
+            variable=self.create_mask_var
+        )
+        self.create_mask_toggle_button.pack(side="left", padx=5)
+
+        # Masken-Checkbox
+        self.mask_toggle_button = ttk.Checkbutton(
+            tracker_controls_row,
+            text="Show Masks",
+            variable=self.masks_visible,
+            command=self.toggle_mask_visibility
+        )
+        self.mask_toggle_button.pack(side="left", padx=5) 
+
+
+
+
 
 
     def setup_video_bottom_frame(self, parent):
@@ -476,7 +503,7 @@ class GalleryNavigator:
 
         bottom_frame.grid_columnconfigure(0, weight=0)  # Dropdowns
         bottom_frame.grid_columnconfigure(1, weight=0)  # Buttons + Toggles
-        bottom_frame.grid_columnconfigure(2, weight=1)  # Listbox
+        bottom_frame.grid_columnconfigure(2, weight=0)  # Listbox
         bottom_frame.grid_columnconfigure(3, weight=0)  # Slider
         bottom_frame.grid_rowconfigure(1, weight=1)
 
@@ -491,7 +518,7 @@ class GalleryNavigator:
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.video_annotation_type = tk.StringVar()
         type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_annotation_type,
-                                    values=["Bounding Box", "Polygon"], width=15)
+                                    values=["Bounding Box", "Polygon", "Single-Point Prompt"], width=15)
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
@@ -705,15 +732,29 @@ class GalleryNavigator:
         )
         
         return answer
+    
+
 
     def toggle_mask_visibility(self):
 
+        current_tab = self.notebook.select()
+        if str(self.image_canvas).startswith(current_tab):
+            self.showing_video = False
+        elif str(self.frame_canvas).startswith(current_tab):
+            self.showing_video = True
+
+
         if self.masks_visible.get():
-            print("[DEBUG] Masks will be shown.")
-            self.mask_handler.load_masks_for_frame()
+            if self.showing_video:
+                print("[DEBUG] Masks will be shown.")
+                self.mask_handler.load_masks_for_frame()
+            else:
+                self.mask_handler.load_masks_for_image()
         else:
             print("[DEBUG] Mask will not be shown.")
             self.mask_handler.clear_all_masks()
+
+
 
     def delete_last_polygon_point_manager(self):
         """

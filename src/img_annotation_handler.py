@@ -6,6 +6,7 @@ import ast
 
 from annotation_loader import AnnotationLoader
 from magic_wand import MagicWand
+from image_mask_predictor import ImageMaskPredictor
 
 
 class ImgAnnotationHandler:
@@ -37,6 +38,7 @@ class ImgAnnotationHandler:
 
 
         self.annotation_loader = AnnotationLoader()
+        self.image_mask_predictor = ImageMaskPredictor(gui)
         self.magic_wand = MagicWand()
 
 
@@ -90,6 +92,9 @@ class ImgAnnotationHandler:
                 self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
 
             self.drawn_rect_ids.append(self.rect_id)
+            if self.gui.create_mask_var.get():
+                self.image_mask_predictor.predict_mask_for_image_bb(idx, x, y, w, h)
+
             print(f"[DEBUG] Added Bounding Box with rect_id {self.rect_id}")
 
         # === Polygon Annotation ===
@@ -674,15 +679,6 @@ class ImgAnnotationHandler:
                 )
                 self.polygon_point_ids.append(point_id)
 
-            # annotype_list = self._safe_parse_list(row.get('polygon_annotype'))
-            # # Prüfen, ob Index gültig ist
-            # if self.polygon_index < len(annotype_list):
-            #     annotype_list[self.polygon_index] = "manually"
-            # else:
-            #     print(f"[ERROR] polygon_index {self.polygon_index} out of range for polygon_annotype.")
-
-            # # Die geänderte Liste zurückschreiben
-            # row['polygon_annotype'] = annotype_list
 
             # Polygon-Linie zeichnen
             self.redraw_polygon()
@@ -704,7 +700,7 @@ class ImgAnnotationHandler:
                     x1, y1, x2, y2 = coords
                     self.rect_start = (x1, y1)
                     self.rect_end = (x2, y2)
-                    self.create_resize_handles()  # funktioniert jetzt ohne Argumente
+                    self.create_resize_handles()  
                 else:
                     print(f"[ERROR] Unexpected coords for rect_id: {coords}")
                     return
@@ -901,11 +897,14 @@ class ImgAnnotationHandler:
         self.listbox_index >= len(w_list) or self.listbox_index >= len(h_list):
             print(f"[Update Error] annotation index {self.listbox_index} out of range in DataFrame lists.")
             return
+        
+        self.image_mask_predictor.predict_mask_for_image_bb(None, new_x,new_y,new_w,new_h)
 
         x_list[self.listbox_index] = new_x
         y_list[self.listbox_index] = new_y
         w_list[self.listbox_index] = new_w
         h_list[self.listbox_index] = new_h
+        #path_list[self.listbox_index] = mask_path
 
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'x'] = x_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'y'] = y_list
@@ -920,6 +919,7 @@ class ImgAnnotationHandler:
         self.gui.img_annotation_listbox.insert(self.listbox_index, updated_text)
         self.gui.img_annotation_listbox.selection_set(self.listbox_index)
         self.gui.img_annotation_listbox.activate(self.listbox_index)
+
 
         print(f"[INFO] Updated Bounding Box annotation at index {self.listbox_index}")
 

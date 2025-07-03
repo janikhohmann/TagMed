@@ -46,9 +46,6 @@ class  VideoTracking:
 
 
 
-
-
-
     def tracking_starter(self):
 
         selected_annotation = self.gui.video_annotation_listbox.curselection()
@@ -279,7 +276,7 @@ class  VideoTracking:
     #         import traceback
     #         print("[ERROR] Failed to load SAM2 model:")
     #         traceback.print_exc()
-            self.sam2_predictor = None
+            # self.sam2_predictor = None
 
     def load_sam2_model(self):
         """
@@ -322,7 +319,6 @@ class  VideoTracking:
     def sam2_tracking_method(self):
         """
         Uses SAM2 to propagate a bounding box across all following video frames.
-        FIXED VERSION - removes critical bugs from previous implementation.
         """
         selected_annotation = self.gui.video_annotation_listbox.curselection()
         selected_annotation_index = selected_annotation[0]
@@ -358,22 +354,15 @@ class  VideoTracking:
             try:
                 polygon_list = self._safe_parse_list(row.get('polygon'))
                 polygon_class_list = self._safe_parse_list(row.get('class_polygon'))
-                
-                # if selected_annotation_index >= len(polygon_list):
-                #     print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
-                #     return
                     
                 polygon = polygon_list[selected_annotation_index]
                 selected_class = polygon_class_list[selected_annotation_index]
 
-                
                 if not isinstance(polygon, list) or len(polygon) < 3:  # Mindestens 3 Punkte (x,y pairs)
                     print("[ERROR] Invalid polygon data - need at least 3 points.")
                     return
                     
                 initial_polygon_mask = self._polygon_to_mask(polygon, resize_w, resize_h).squeeze()
-                calculated_polygon = self._mask_to_polygon(initial_polygon_mask)
-
 
             except IndexError:
                 print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
@@ -382,7 +371,7 @@ class  VideoTracking:
             try:
                 # POLYGON TRACKING LOOP
 
-                expected_size = (256, 256)  # oder (1024, 1024), je nach SAM2 Modell
+                expected_size = (256, 256) 
 
                 # Resize maske
                 previous_mask = cv2.resize(
@@ -400,7 +389,6 @@ class  VideoTracking:
                         current_frames[i]
                     )
                     
-
                     image_bgr = cv2.imread(frame_path)
                     if image_bgr is None:
                         print(f"[WARN] Could not read image: {frame_path}")
@@ -767,15 +755,16 @@ class  VideoTracking:
             return None
         
         # Get largest contour
-        largest_contour = max(contours, key=cv2.contourArea)
+        contour = max(contours, key=cv2.contourArea)
         
-        # Simplify contour to reduce number of points
-        epsilon = 0.01 * cv2.arcLength(largest_contour, True)
-        simplified_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+        # Simplify contour to reduce number of points --> is not used in the current implementation
+        # Uncomment the following lines if you want to simplify the contour
+        # epsilon = 0.01 * cv2.arcLength(contour, True)
+        # contour = cv2.approxPolyDP(contour, epsilon, True)
         
 
         polygon_points = []
-        for point in largest_contour:
+        for point in contour:
             x, y = point[0]  # OpenCV contour format: [[x, y]]
             polygon_points.append((int(x), int(y)))
 

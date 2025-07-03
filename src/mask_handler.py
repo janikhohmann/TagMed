@@ -74,8 +74,6 @@ class MaskHandler:
         """Load masks for the selected frame into canvas."""
         self.clear_all_masks()
 
-        found_count = 0 
-
         current_frame_id = self.gui.current_frame_id
         #current_frame_index = self.gui.current_frame_index
 
@@ -109,10 +107,49 @@ class MaskHandler:
                 continue
 
 
+    def load_masks_for_image(self):
+        """Load masks for the selected frame into canvas."""
+        self.clear_all_masks()
+
+        current_frame_id = self.gui.selected_image_index.split(".")[0].strip()
+        #current_frame_index = self.gui.current_frame_index
+
+        masks = self.searching_for_matching_masks(current_frame_id) 
+        print(masks)
+        for mask in masks:
+            mask_path = os.path.join(self.mask_dir, mask)
+            try:
+                mask_data = np.load(mask_path)['mask']  # Load the mask data
+                height, width = mask_data.shape
+                red_color = (255, 0, 0, 70)  # bright, transparent red (alpha=60/255)
+                rgba_array = np.zeros((height, width, 4), dtype=np.uint8)
+
+                rgba_array[mask_data > 0] = red_color  # only fill mask
+
+                # Convert in PIL-Image then in PhotoImage
+                pil_image = Image.fromarray(rgba_array, mode="RGBA")
+                tk_image = ImageTk.PhotoImage(pil_image)
+
+                # Show Image on Canvas
+                mask_id = self.gui.image_canvas.create_image(0, 0, anchor="nw", image=tk_image, tags=("mask",))
+
+                
+                # Prevent garbage collection
+                if not hasattr(self.gui, 'mask_image_refs'):
+                    self.gui.mask_image_refs = []
+                self.gui.mask_image_refs.append(tk_image)
+
+            except Exception as e:
+                print(f"[ERROR] Failed to draw mask for {mask} (Error: {e})")
+                continue
+
+
+
 
     def clear_all_masks(self):
         """Clear all masks."""
         self.gui.frame_canvas.delete("mask")
+        self.gui.image_canvas.delete("mask")
 
         if not hasattr(self.gui, 'mask_image_refs'):
             self.gui.mask_image_refs = []

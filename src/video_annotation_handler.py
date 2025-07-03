@@ -45,6 +45,10 @@ class VideoAnnotationHandler():
         self.is_drawing_polygon = False
         self.dragging_polygon = False
 
+        self.single_point_prompts = []  # For single-point prompt annotations
+        self.single_point_prompt_ids = []  # IDs of drawn single-point prompts
+        self.is_giving_single_points = False
+
         # mask specific attributes
         self.mask_handler = MaskHandler(self)
 
