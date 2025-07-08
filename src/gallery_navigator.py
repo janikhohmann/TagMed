@@ -12,6 +12,7 @@ from img_annotation_handler import ImgAnnotationHandler
 from video_annotation_handler import VideoAnnotationHandler
 from video_tracking import VideoTracking
 from mask_handler import MaskHandler
+from sam2_tracking import SAM2Tracking
 
 class GalleryNavigator:
     def __init__(self, root):
@@ -40,6 +41,7 @@ class GalleryNavigator:
         self.good_2_go_mode = False  # Flag to indicate if good-to-go mode is active
 
         self.video_tracking = VideoTracking(self)
+        self.sam2_tracking = SAM2Tracking(self)
 
         self.mask_handler = MaskHandler(self)
         self.create_mask_var = tk.BooleanVar(value=False)
@@ -790,7 +792,7 @@ class GalleryNavigator:
 
         def worker():
             try:
-                self.video_tracking.sam2_tracking_method()
+                self.sam2_tracking.sam2_tracking_method()
             finally:
                 def cleanup():
                     spinner.stop()
