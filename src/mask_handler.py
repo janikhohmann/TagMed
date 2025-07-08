@@ -54,6 +54,24 @@ class MaskHandler:
             print(f"Mask file not found for deletion: {mask_path}")
         except Exception as e:
             print(f"Error deleting mask file: {e}")
+    
+    def delete_all_masks_for_one_video(self, frame_id):
+        """
+        Delete all mask files for a specific video.
+        """
+
+        print(f"Deleting masks for video frame: {frame_id}")
+        masks = self.searching_for_matching_masks(frame_id)
+        print(f"Found masks: {masks}")
+        if not masks:
+            print(f"No masks found for video {frame_id}.")
+            return
+    
+        for mask in masks:
+            mask_path = os.path.join(self.mask_dir, mask)
+            self.delete_mask(mask_path)
+        
+        print(f"All masks for video {frame_id} have been deleted.")
 
     def searching_for_matching_masks(self, frame_id):
         """

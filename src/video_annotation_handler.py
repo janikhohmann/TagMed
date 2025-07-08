@@ -682,9 +682,9 @@ class VideoAnnotationHandler():
                 self.gui.all_annotations.at[df_index, 'bb_annotype'] = bbox_annotype_list
 
                 # Delete Mask if it exists
-                mask_paths = self._safe_parse_list(self.gui.all_annotations.at[idx, 'masks'])
-                if index < len(mask_paths):
-                    path_to_remove = mask_paths[index]
+                mask_paths = self._safe_parse_list(self.gui.all_annotations.at[df_index, 'masks'])
+                if self.listbox_index < len(mask_paths):
+                    path_to_remove = mask_paths[self.listbox_index]
                 self.mask_handler.delete_mask(path_to_remove)
 
                 if len(coords) == 4:

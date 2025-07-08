@@ -649,6 +649,8 @@ class  VideoTracking:
             for i in range(len(current_frames)):
                 img_id = current_frames[i].split(".")[0] # get the next frame
 
+                self.mask_handler.delete_all_masks_for_one_video(img_id) # delete all masks for the current frame
+
                 # searching for match for the next frame
                 match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == img_id
                 if match_next.any():
@@ -657,14 +659,18 @@ class  VideoTracking:
                     for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype', 'polygon', 'class_polygon', 'polygon_annoytype']:
                         self.gui.all_annotations.at[next_df_index, col] = "NN"
             
-            self.video_annotation_handler.clear_all_masks()
+            self.mask_handler.clear_all_masks()
             self.video_annotation_handler.clear_all_annotations()
             self.video_annotation_handler.delete_all_polygons()
             self.video_annotation_handler.delete_all_bounding_boxes()
             self.video_annotation_handler.update_video_listbox_with_annotation_colors()
 
-        except:
-            pass
+        except Exception as e:
+            print(f"[ERROR] Could not delete all annotations for video: {e}")
+            import traceback
+            traceback.print_exc()
+            return
+            
 
     def _safe_parse_list(self, value):
         """Hilfsfunktion zum sicheren Parsen von Listen aus Strings oder Listen."""
