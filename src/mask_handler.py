@@ -148,8 +148,14 @@ class MaskHandler:
 
     def clear_all_masks(self):
         """Clear all masks."""
-        self.gui.frame_canvas.delete("mask")
-        self.gui.image_canvas.delete("mask")
+        try:
+            self.gui.frame_canvas.delete("mask")
+        except AttributeError:
+            pass  # If frame_canvas does not exist, ignore
+        try:
+            self.gui.image_canvas.delete("mask")
+        except AttributeError:
+            pass  # If image_canvas does not exist, ignore
 
         if not hasattr(self.gui, 'mask_image_refs'):
             self.gui.mask_image_refs = []
