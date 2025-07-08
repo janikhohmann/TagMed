@@ -39,6 +39,7 @@ class SAM2Tracking:
 
         self.sam2_model_l_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
         self.sam2_predictor = None
+        self.inference_state = None  # For video tracking state
 
 
 
@@ -96,62 +97,42 @@ class SAM2Tracking:
 
 
 
-    # def load_sam2_model(self):
-    #     """
-    #     Loads the SAM2 model and prepares the image predictor for advanced tracking.
-    #     This should be called once during initialization.
-    #     """
-    #     try:
-    #         config_path = "sam2_hiera_l"  # Passe den Pfad ggf. an
-    #         checkpoint_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/sam2.1_hiera_large.pt"     # Passe den Pfad ggf. an
-    #         device = "cuda" if torch.cuda.is_available() else "cpu"
-    #         print(f"[INFO] Loading SAM2 model on {device}")
-
-    #         #config = OmegaConf.load(config_path)
-    #         model = build_sam2(config_path, checkpoint_path, device=device)
-
-    #         self.sam2_predictor = SAM2ImagePredictor(model)
-    #         print("[INFO] SAM2 model successfully loaded.")
-
-    #     except Exception as e:
-    #         import traceback
-    #         print("[ERROR] Failed to load SAM2 model:")
-    #         traceback.print_exc()
-            # self.sam2_predictor = None
-
     def load_sam2_model(self):
         """
-        Loads the SAM2 model and prepares the image predictor for advanced tracking.
+        Loads the SAM2 video predictor for video tracking.
         This should be called once during initialization.
         """
-
         try:
-            from sam2.build_sam import build_sam2
-            from sam2.sam2_image_predictor import SAM2ImagePredictor
+            from sam2.build_sam import build_sam2_video_predictor
             
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            print(f"[INFO] Loading SAM2 model on {device}")
+            print(f"[INFO] Loading SAM2 video predictor on {device}")
             
-            # ✅ VERWENDE NUR DIE CONFIG, OHNE CHECKPOINT (Nutzt vortrainierte Gewichte)
-            config_path = "sam2_hiera_l"
-            checkoint_path = "/home/janik/Documents/scripts/annotation_pipeline_02/annotation/sam2_hiera_large.pt"  
-            #checkoint_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/sam2.1_hiera_large.pt" # Pfad zum Checkpoint
+            # Set device-specific configurations
+            if device == "cuda":
+                # use bfloat16 for the entire workflow
+                torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
+                # turn on tfloat32 for Ampere GPUs
+                if torch.cuda.get_device_properties(0).major >= 8:
+                    torch.backends.cuda.matmul.allow_tf32 = True
+                    torch.backends.cudnn.allow_tf32 = True
+            elif device == "mps":
+                print(
+                    "\nSupport for MPS devices is preliminary. SAM 2 is trained with CUDA and might "
+                    "give numerically different outputs and sometimes degraded performance on MPS."
+                )
             
-            try:
-                # Erst mit Checkpoint versuchen
-                model = build_sam2(config_path, checkoint_path, device=device)
-                print("[INFO] Model loaded with checkpoint (using default weights)")
-            except:
-                # Falls das nicht funktioniert, versuche ohne dem Checkpoint
-                model = build_sam2(config_path, None, device=device)
-                print("[INFO] Model loaded without checkpoint")
-
-            self.sam2_predictor = SAM2ImagePredictor(model)
-            print("[INFO] SAM2 model successfully loaded.")
+            # Use the downloaded model checkpoint
+            sam2_checkpoint = self.sam2_model_l_path
+            model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
+            
+            self.sam2_predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
+            self.inference_state = None  # Will be initialized per video sequence
+            print("[INFO] SAM2 video predictor successfully loaded.")
 
         except Exception as e:
             import traceback
-            print(f"[ERROR] Failed to load SAM2 model: {e}")
+            print(f"[ERROR] Failed to load SAM2 video predictor: {e}")
             traceback.print_exc()
             self.sam2_predictor = None
 
@@ -159,7 +140,7 @@ class SAM2Tracking:
             
     def sam2_tracking_method(self):
         """
-        Uses SAM2 to propagate a bounding box across all following video frames.
+        Uses SAM2 video predictor to propagate annotations across all following video frames.
         """
         selected_annotation = self.gui.video_annotation_listbox.curselection()
         selected_annotation_index = selected_annotation[0]
@@ -168,7 +149,7 @@ class SAM2Tracking:
         current_image_id = current_frames[current_frame_index].split(".")[0]
         selected_class = self.gui.video_selected_class.get()
 
-        # find matching row in DataFrame
+        # Find matching row in DataFrame
         match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == current_image_id
         if not match.any():
             print(f"[ERROR] No entry in database for {current_image_id}")
@@ -176,261 +157,350 @@ class SAM2Tracking:
         df_index = self.gui.all_annotations[match].index[0]
         row = self.gui.all_annotations.loc[df_index]
 
-        # Check if Polygon or Bounding Box
-        selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
-        is_polygon = "Polygon" in selected_text
-
+        # Check if we have the video predictor loaded
         if not hasattr(self, "sam2_predictor") or self.sam2_predictor is None:
             self.load_sam2_model()
         predictor = self.sam2_predictor
 
+        # Initialize video sequence - create a temporary directory with frames
+        video_path = os.path.join(self.selected_image_folder, self.gui.patient_id, self.gui.selected_exam)
+        temp_video_dir = self._create_temp_video_directory(video_path, current_frames)
+        
+        # Reset any previous state and initialize for this video sequence
+        if hasattr(self, 'inference_state') and self.inference_state is not None:
+            predictor.reset_state(self.inference_state)
+        
         resize_h, resize_w = self.image_size
+
+        print(f"[INFO] Initializing SAM2 video predictor for temp video path: {temp_video_dir}")
+        print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
+        print(f"[DEBUG] Number of frames: {len(current_frames)}")
+        print(f"[DEBUG] Current frame index: {current_frame_index}")
+        self.inference_state = predictor.init_state(video_path=temp_video_dir)
+
+        # Check if Polygon or Bounding Box
+        selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
+        is_polygon = "Polygon" in selected_text
+
+        
 
         # ===== POLYGON TRACKING =====
         if is_polygon:
-            print("[INFO] Starting SAM2 polygon tracking...")
-    
+            print("[INFO] Starting SAM2 video polygon tracking...")
             
-            # Get polygon data from dataframe
             try:
+                # Get polygon data from dataframe
                 polygon_list = self._safe_parse_list(row.get('polygon'))
                 polygon_class_list = self._safe_parse_list(row.get('class_polygon'))
                     
                 polygon = polygon_list[selected_annotation_index]
                 selected_class = polygon_class_list[selected_annotation_index]
 
-                if not isinstance(polygon, list) or len(polygon) < 3:  # Mindestens 3 Punkte (x,y pairs)
+                if not isinstance(polygon, list) or len(polygon) < 3:
                     print("[ERROR] Invalid polygon data - need at least 3 points.")
+                    self._cleanup_temp_directory(temp_video_dir)
                     return
+
+                # Convert polygon to points for SAM2 (using polygon centroid as positive click)
+                points_array = np.array(polygon).reshape(-1, 2)
+                
+                # Scale polygon coordinates from GUI size to original frame size
+                original_frame_path = os.path.join(video_path, current_frames[current_frame_index])
+                if os.path.exists(original_frame_path):
+                    import cv2
+                    original_frame = cv2.imread(original_frame_path)
+                    original_height, original_width = original_frame.shape[:2]
                     
-                initial_polygon_mask = self._polygon_to_mask(polygon, resize_w, resize_h).squeeze()
+                    # Scale coordinates from GUI size to original size
+                    scale_x = original_width / resize_w
+                    scale_y = original_height / resize_h
+                    
+                    # Scale all polygon points
+                    scaled_points = points_array.copy().astype(np.float64)  # Convert to float for scaling
+                    scaled_points[:, 0] *= scale_x  # Scale x coordinates
+                    scaled_points[:, 1] *= scale_y  # Scale y coordinates
+                    
+                    centroid_x = int(np.mean(scaled_points[:, 0]))
+                    centroid_y = int(np.mean(scaled_points[:, 1]))
+                    
+                    print(f"[DEBUG] Original polygon centroid: ({np.mean(points_array[:, 0])}, {np.mean(points_array[:, 1])})")
+                    print(f"[DEBUG] Scaled polygon centroid: ({centroid_x}, {centroid_y})")
+                    print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
+                else:
+                    centroid_x = int(np.mean(points_array[:, 0]))
+                    centroid_y = int(np.mean(points_array[:, 1]))
+                
+                # Add the click at the centroid
+                ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
+                points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
+                labels = np.array([1], np.int32)  # Positive click
+                
+                _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                    inference_state=self.inference_state,
+                    frame_idx=current_frame_index,
+                    obj_id=ann_obj_id,
+                    points=points,
+                    labels=labels,
+                )
 
             except IndexError:
                 print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
+                self._cleanup_temp_directory(temp_video_dir)
                 return
 
+        else:
+            # ===== BOUNDING BOX TRACKING =====
+            print("[INFO] Starting SAM2 video bounding box tracking...")
+            
             try:
-                # POLYGON TRACKING LOOP
+                x_list = self._safe_parse_list(row.get('x'))
+                y_list = self._safe_parse_list(row.get('y'))
+                w_list = self._safe_parse_list(row.get('w'))
+                h_list = self._safe_parse_list(row.get('h'))
+                class_list = self._safe_parse_list(row.get('class'))
 
-                expected_size = (256, 256) 
+                x = x_list[selected_annotation_index]
+                y = y_list[selected_annotation_index]
+                w = w_list[selected_annotation_index]
+                h = h_list[selected_annotation_index]
+                selected_class = class_list[selected_annotation_index]
 
-                # Resize maske
-                previous_mask = cv2.resize(
-                    initial_polygon_mask.squeeze().astype(np.uint8),
-                    expected_size,
-                    interpolation=cv2.INTER_NEAREST)
-                previous_mask = previous_mask[None, :, :]  # Von [H,W] zu [1,H,W]
-                
-                for i in range(current_frame_index, len(current_frames)):
-                    next_img_id = current_frames[i].split(".")[0]
-                    frame_path = os.path.join(
-                        self.selected_image_folder, 
-                        self.gui.patient_id, 
-                        self.gui.selected_exam, 
-                        current_frames[i]
-                    )
+                # Convert to SAM2 box format (x0, y0, x1, y1)
+                # Scale coordinates from GUI size to original frame size
+                original_frame_path = os.path.join(video_path, current_frames[current_frame_index])
+                if os.path.exists(original_frame_path):
+                    import cv2
+                    original_frame = cv2.imread(original_frame_path)
+                    original_height, original_width = original_frame.shape[:2]
                     
-                    image_bgr = cv2.imread(frame_path)
-                    if image_bgr is None:
-                        print(f"[WARN] Could not read image: {frame_path}")
-                        continue
-                        
-                    image_bgr = cv2.resize(image_bgr, (resize_w, resize_h))
-                    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-
-                    predictor.set_image(image_rgb)
-
-
-                    try:
-                        masks, iou_preds, low_res_masks = predictor.predict(mask_input=previous_mask, multimask_output=False)
+                    # Scale coordinates from GUI size to original size
+                    scale_x = original_width / resize_w
+                    scale_y = original_height / resize_h
+                    
+                    scaled_x = x * scale_x
+                    scaled_y = y * scale_y
+                    scaled_w = w * scale_x
+                    scaled_h = h * scale_y
+                    
+                    print(f"[DEBUG] Original coords: x={x}, y={y}, w={w}, h={h}")
+                    print(f"[DEBUG] Scaled coords: x={scaled_x}, y={scaled_y}, w={scaled_w}, h={scaled_h}")
+                    print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
+                    print(f"[DEBUG] Original frame size: {original_width}x{original_height}, GUI size: {resize_w}x{resize_h}")
+                    
+                    input_box = self.center_to_corners(scaled_x, scaled_y, scaled_w, scaled_h)
+                else:
+                    input_box = self.center_to_corners(x, y, w, h)
                 
-                        if masks[0].sum() == 0:
-                            print(f"[INFO] No segmentation for frame {next_img_id}")
-                            continue
-                    except Exception as e:
-                        print(f"[ERROR] SAM2 failed on frame {next_img_id}: {e}")
+                ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
+
+                print(f"[DEBUG] Starting tracking with bbox: x={x}, y={y}, w={w}, h={h}")
+                print(f"[DEBUG] SAM2 input_box: {input_box}")
+                
+                _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                    inference_state=self.inference_state,
+                    frame_idx=current_frame_index,
+                    obj_id=ann_obj_id,
+                    box=input_box,
+                )
+
+            except IndexError:
+                print(f"[ERROR] Bounding box index {selected_annotation_index} out of range.")
+                self._cleanup_temp_directory(temp_video_dir)
+                return
+
+        # ===== PROPAGATE THROUGH VIDEO =====
+        print("[INFO] Propagating annotations through video...")
+        
+        try:
+            # Collect results in a dict
+            video_segments = {}
+            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.inference_state):
+                video_segments[out_frame_idx] = {
+                    out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                    for i, out_obj_id in enumerate(out_obj_ids)
+                }
+
+            # Process results for frames starting from current frame
+            frames_processed = 0
+            for frame_idx in range(current_frame_index, len(current_frames)):
+                if frame_idx in video_segments and ann_obj_id in video_segments[frame_idx]:
+                    mask = video_segments[frame_idx][ann_obj_id]
+                    next_img_id = current_frames[frame_idx].split(".")[0]
+                    
+                    # Ensure mask is 2D (remove any extra dimensions)
+                    if mask.ndim > 2:
+                        mask = mask.squeeze()  # Remove dimensions of size 1
+                    
+                    # Skip empty masks
+                    if mask.sum() == 0:
+                        print(f"[INFO] Empty mask for frame {next_img_id}")
                         continue
 
-                    mask = masks[0]
-                    gerated_polygon = self._mask_to_polygon(mask.squeeze())
-
-                    # Update previous mask for next iteration
-                    previous_mask = mask
-                    previous_mask = cv2.resize(
-                        initial_polygon_mask.squeeze().astype(np.uint8),
-                        expected_size,
-                        interpolation=cv2.INTER_NEAREST)
-                    previous_mask = previous_mask[None, :, :]  
-
-                    if i != current_frame_index: # skip the first frame because we dont want to create another bounding box
-                        ys, xs = np.where(mask.squeeze())
-
-                        if len(xs) == 0 or len(ys) == 0:
-                            print(f"[INFO] Empty mask on frame {next_img_id}")
-                            continue
-
-                        # searching for match for the next frame
+                    # Save mask (ensure it's 2D before saving)
+                    # Scale mask to GUI size for consistency with annotations
+                    if mask.shape != (resize_h, resize_w):
+                        # Scale mask to GUI size
+                        mask_for_gui = cv2.resize(mask.astype(np.uint8), (resize_w, resize_h), interpolation=cv2.INTER_NEAREST)
+                        path_mask = self.mask_handler.save_mask(mask_for_gui, next_img_id, selected_class, selected_annotation_index)
+                    else:
+                        path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
+                    
+                    # Update database for frames after the initial frame
+                    if frame_idx != current_frame_index:
+                        # Find or create entry for this frame
                         match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == next_img_id
                         if match_next.any():
                             next_df_index = self.gui.all_annotations[match_next].index[0]
-
-                            # Get existing polygon data
-                            existing_polygons = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'polygon'])
-                            existing_class_polygons = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'class_polygon'])
-                            existing_polygon_annotypes = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'polygon_annotype'])
                             
-                            # Ensure lists are long enough
-                            while len(existing_polygons) <= selected_annotation_index:
-                                existing_polygons.append([])
-                                existing_class_polygons.append("")
-                                existing_polygon_annotypes.append("")
-                            
-                            # Update at the specific index
-                            existing_polygons[selected_annotation_index] = gerated_polygon
-                            existing_class_polygons[selected_annotation_index] = selected_class
-                            existing_polygon_annotypes[selected_annotation_index] = "tracking"
-                            
-                            # Save back to dataframe
-                            self.gui.all_annotations.at[next_df_index, 'polygon'] = existing_polygons
-                            self.gui.all_annotations.at[next_df_index, 'class_polygon'] = existing_class_polygons
-                            self.gui.all_annotations.at[next_df_index, 'polygon_annotype'] = existing_polygon_annotypes
-                    
-                        # save mask for all following frames
-                        path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
-                        self.gui.all_annotations.at[next_df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, "masks"], path_mask)
-                    
-                    else: # save the first frame mask
-                        path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
-                        self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[df_index, "masks"], path_mask)
-
-                print(f"[INFO] SAM2 Polygon Tracking completed for {len(current_frames) - current_frame_index} frames.")
-                return  # Exit after polygon tracking
-
-            except Exception as e:
-                print(f"[ERROR] SAM2 Polygon Tracking could not be finished: {e}")
-                import traceback
-                traceback.print_exc()
-                return
-
-        # ===== Bounding Box TRACKING =====
-        try:
-            x_list = self._safe_parse_list(row.get('x'))
-            y_list = self._safe_parse_list(row.get('y'))
-            w_list = self._safe_parse_list(row.get('w'))
-            h_list = self._safe_parse_list(row.get('h'))
-            class_list = self._safe_parse_list(row.get('class'))
-
-            x = x_list[selected_annotation_index]
-            y = y_list[selected_annotation_index]
-            w = w_list[selected_annotation_index]
-            h = h_list[selected_annotation_index]
-            selected_class = class_list[selected_annotation_index]
-
-            # Initial input box - convert x,y,w,h values into sam2 format x0, y0, x1, y1
-
-
-            scale_x = resize_w / 1280
-            scale_y = resize_h / 960
-
-
-            input_box = self.center_to_corners(x, y, w, h)
-
-            print(f"[DEBUG] Starting tracking with bbox: x={x}, y={y}, w={w}, h={h}")
-
-        except IndexError:
-            print(f"[ERROR] rect_id Index {selected_annotation_index} out of range.")
-            return
-
-        try:
-            # create a mask for all following images
-            for i in range(current_frame_index , len(current_frames)):
-                next_img_id = current_frames[i].split(".")[0]
-                frame_path = os.path.join(
-                    self.selected_image_folder, 
-                    self.gui.patient_id, 
-                    self.gui.selected_exam, 
-                    current_frames[i]
-                )
-                
-
-                image_bgr = cv2.imread(frame_path)
-                if image_bgr is None:
-                    print(f"[WARN] Could not read image: {frame_path}")
-                    continue
-                originial_height, original_width = image_bgr.shape[:2]
-
-                image_bgr = cv2.resize(image_bgr, (resize_w, resize_h))
-                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-
-
-                predictor.set_image(image_rgb)
-
-                try:
-                    masks, iou_preds, low_res_masks = predictor.predict(box=input_box, multimask_output=False)
-            
-                    if masks[0].sum() == 0:
-                        print(f"[INFO] No segmentation for frame {next_img_id}")
-                        continue
-                except Exception as e:
-                    print(f"[ERROR] SAM2 failed on frame {next_img_id}: {e}")
-                    continue
-
-                mask = masks[0]
-
-                if i != current_frame_index: # skip the first frame because we dont want to create another bounding box
-                    ys, xs = np.where(mask.squeeze())
-
-                    if len(xs) == 0 or len(ys) == 0:
-                        print(f"[INFO] Empty mask on frame {next_img_id}")
-                        continue
-
-                    # get new predicted bounding box values and convert it from x0, y0, x1, y1 into x,y,w,h format
-                    x0, y0 = xs.min(), ys.min()
-                    x1, y1 = xs.max(), ys.max()
-                    new_x, new_y, new_w, new_h = self.corners_to_center(x0, y0, x1, y1)
-
-                    input_box = np.array([x0, y0, x1, y1], dtype=np.float32)
-
-
-
-                    # searching for match for the next frame
-                    match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == next_img_id
-                    if match_next.any():
-                        next_df_index = self.gui.all_annotations[match_next].index[0]
-
-                        for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [new_x, new_y, new_w, new_h, selected_class, 'tracking']):
-                            existing_list = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, col])
-
-                            # Stelle überschreiben, falls vorhanden, sonst auffüllen
-                            if len(existing_list) > selected_annotation_index:
-                                existing_list[selected_annotation_index] = val
+                            if is_polygon:
+                                # Convert mask back to polygon - scale to GUI coordinates
+                                generated_polygon = self._mask_to_polygon(mask.squeeze())
+                                
+                                # Scale polygon coordinates back to GUI size
+                                if generated_polygon:
+                                    original_frame_path = os.path.join(video_path, current_frames[frame_idx])
+                                    if os.path.exists(original_frame_path):
+                                        original_frame = cv2.imread(original_frame_path)
+                                        original_height, original_width = original_frame.shape[:2]
+                                        
+                                        # Scale coordinates back from original size to GUI size
+                                        scale_x = resize_w / original_width
+                                        scale_y = resize_h / original_height
+                                        
+                                        scaled_polygon = []
+                                        for point in generated_polygon:
+                                            scaled_x = int(point[0] * scale_x)
+                                            scaled_y = int(point[1] * scale_y)
+                                            scaled_polygon.append((scaled_x, scaled_y))
+                                        generated_polygon = scaled_polygon
+                                
+                                # Update polygon data
+                                existing_polygons = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'polygon'])
+                                existing_class_polygons = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'class_polygon'])
+                                existing_polygon_annotypes = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'polygon_annotype'])
+                                
+                                # Ensure lists are long enough
+                                while len(existing_polygons) <= selected_annotation_index:
+                                    existing_polygons.append([])
+                                    existing_class_polygons.append("")
+                                    existing_polygon_annotypes.append("")
+                                
+                                # Update at the specific index
+                                existing_polygons[selected_annotation_index] = generated_polygon
+                                existing_class_polygons[selected_annotation_index] = selected_class
+                                existing_polygon_annotypes[selected_annotation_index] = "tracking"
+                                
+                                # Save back to dataframe
+                                self.gui.all_annotations.at[next_df_index, 'polygon'] = existing_polygons
+                                self.gui.all_annotations.at[next_df_index, 'class_polygon'] = existing_class_polygons
+                                self.gui.all_annotations.at[next_df_index, 'polygon_annotype'] = existing_polygon_annotypes
+                                
                             else:
-                                # Falls Liste zu kurz: mit None auffüllen und anhängen
-                                while len(existing_list) < selected_annotation_index:
-                                    existing_list.append(None)
-                                existing_list.append(val)
+                                # Update bounding box data - scale back to GUI coordinates
+                                ys, xs = np.where(mask.squeeze())
+                                if len(xs) > 0 and len(ys) > 0:
+                                    x0, y0 = xs.min(), ys.min()
+                                    x1, y1 = xs.max(), ys.max()
+                                    
+                                    # Scale coordinates back to GUI size
+                                    original_frame_path = os.path.join(video_path, current_frames[frame_idx])
+                                    if os.path.exists(original_frame_path):
+                                        import cv2
+                                        original_frame = cv2.imread(original_frame_path)
+                                        original_height, original_width = original_frame.shape[:2]
+                                        
+                                        # Scale coordinates back from original size to GUI size
+                                        scale_x = resize_w / original_width
+                                        scale_y = resize_h / original_height
+                                        
+                                        scaled_x0 = x0 * scale_x
+                                        scaled_y0 = y0 * scale_y
+                                        scaled_x1 = x1 * scale_x
+                                        scaled_y1 = y1 * scale_y
+                                        
+                                        new_x, new_y, new_w, new_h = self.corners_to_center(scaled_x0, scaled_y0, scaled_x1, scaled_y1)
+                                    else:
+                                        new_x, new_y, new_w, new_h = self.corners_to_center(x0, y0, x1, y1)
 
-                            self.gui.all_annotations.at[next_df_index, col] = existing_list
+                                    for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], 
+                                                      [new_x, new_y, new_w, new_h, selected_class, 'tracking']):
+                                        existing_list = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, col])
 
-                    # save mask for all following frames
-                    path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
-                    self.gui.all_annotations.at[next_df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[next_df_index, "masks"], path_mask)
-                
-                else: # save the first frame mask
-                    path_mask = self.mask_handler.save_mask(mask, next_img_id, selected_class, selected_annotation_index)
-                    self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[df_index, "masks"], path_mask)
-                   
+                                        # Ensure list is long enough
+                                        while len(existing_list) <= selected_annotation_index:
+                                            existing_list.append(None)
+                                        
+                                        existing_list[selected_annotation_index] = val
+                                        self.gui.all_annotations.at[next_df_index, col] = existing_list
 
-            print(f"[INFO] SAM2 Tracking completed for {len(current_frames) - current_frame_index - 1} frames.")
+                            # Update masks
+                            self.gui.all_annotations.at[next_df_index, "masks"] = self._append_or_init_list(
+                                self.gui.all_annotations.at[next_df_index, "masks"], path_mask)
+                    else:
+                        # Save mask for initial frame
+                        self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(
+                            self.gui.all_annotations.at[df_index, "masks"], path_mask)
+                    
+                    frames_processed += 1
+
+            print(f"[INFO] SAM2 Video Tracking completed for {frames_processed} frames.")
 
         except Exception as e:
-            print(f"[ERROR] SAM2 Tracking Method could not be finished: {e}")
+            print(f"[ERROR] SAM2 Video Tracking could not be finished: {e}")
             import traceback
             traceback.print_exc()
+        finally:
+            # Always cleanup temporary directory
+            self._cleanup_temp_directory(temp_video_dir)
+    
 
-
-
-
+    def _create_temp_video_directory(self, video_path, current_frames):
+        """
+        Creates a temporary directory with symlinks to video frames in the format expected by SAM2.
+        SAM2 expects frames named like 00000.jpg, 00001.jpg, etc.
+        """
+        import tempfile
+        import shutil
+        
+        # Create temporary directory
+        temp_dir = tempfile.mkdtemp(prefix="sam2_video_")
+        print(f"[INFO] Created temporary directory: {temp_dir}")
+        
+        try:
+            # Create symlinks for each frame with the expected naming format
+            for i, frame_name in enumerate(current_frames):
+                source_path = os.path.join(video_path, frame_name)
+                # SAM2 expects frame names like 00000.jpg, 00001.jpg, etc.
+                target_name = f"{i:05d}.jpg"
+                target_path = os.path.join(temp_dir, target_name)
+                
+                if os.path.exists(source_path):
+                    # Create symlink (faster than copying)
+                    os.symlink(source_path, target_path)
+                    #print(f"[DEBUG] Created symlink: {source_path} -> {target_path}")
+                else:
+                    print(f"[WARN] Source frame not found: {source_path}")
+            
+            return temp_dir
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to create temp video directory: {e}")
+            # Cleanup on error
+            self._cleanup_temp_directory(temp_dir)
+            raise
+    
+    def _cleanup_temp_directory(self, temp_dir):
+        """
+        Removes the temporary directory and all its contents.
+        """
+        import shutil
+        
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+                print(f"[INFO] Cleaned up temporary directory: {temp_dir}")
+        except Exception as e:
+            print(f"[WARN] Failed to cleanup temporary directory {temp_dir}: {e}")
 
 # ====== Helper Functions ======
 

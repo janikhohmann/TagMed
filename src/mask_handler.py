@@ -35,10 +35,16 @@ class MaskHandler:
         <img_id>_<class>_<index>.npz.
         """
         os.makedirs(self.mask_dir, exist_ok=True)
+        
+        # Ensure mask is 2D before saving
+        if mask.ndim > 2:
+            mask = mask.squeeze()  # Remove dimensions of size 1
+        elif mask.ndim == 1:
+            print(f"[ERROR] Cannot save 1D mask for {image_id}_{mask_class}_{mask_idx}")
+            return None
+        
         mask_path = f"{self.mask_dir}/{image_id}_{mask_class}_{mask_idx}.npz"
-        #np.savez_compressed(mask_path, mask=mask.astype(np.uint8))
         np.savez_compressed(mask_path, mask=mask)
-        #np.save(mask_path, mask)
 
         return mask_path
     
@@ -101,6 +107,14 @@ class MaskHandler:
             mask_path = os.path.join(self.mask_dir, mask)
             try:
                 mask_data = np.load(mask_path)['mask']  # Load the mask data
+                
+                # Ensure mask is 2D
+                if mask_data.ndim > 2:
+                    mask_data = mask_data.squeeze()  # Remove dimensions of size 1
+                elif mask_data.ndim == 1:
+                    print(f"[ERROR] Invalid mask dimensions for {mask}: {mask_data.shape}")
+                    continue
+                
                 height, width = mask_data.shape
                 red_color = (255, 0, 0, 70)  # bright, transparent red (alpha=60/255)
                 rgba_array = np.zeros((height, width, 4), dtype=np.uint8)
@@ -138,6 +152,14 @@ class MaskHandler:
             mask_path = os.path.join(self.mask_dir, mask)
             try:
                 mask_data = np.load(mask_path)['mask']  # Load the mask data
+                
+                # Ensure mask is 2D
+                if mask_data.ndim > 2:
+                    mask_data = mask_data.squeeze()  # Remove dimensions of size 1
+                elif mask_data.ndim == 1:
+                    print(f"[ERROR] Invalid mask dimensions for {mask}: {mask_data.shape}")
+                    continue
+                
                 height, width = mask_data.shape
                 red_color = (255, 0, 0, 70)  # bright, transparent red (alpha=60/255)
                 rgba_array = np.zeros((height, width, 4), dtype=np.uint8)

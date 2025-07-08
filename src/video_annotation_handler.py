@@ -683,9 +683,12 @@ class VideoAnnotationHandler():
 
                 # Delete Mask if it exists
                 mask_paths = self._safe_parse_list(self.gui.all_annotations.at[df_index, 'masks'])
-                if self.listbox_index < len(mask_paths):
-                    path_to_remove = mask_paths[self.listbox_index]
-                self.mask_handler.delete_mask(path_to_remove)
+                try:
+                    if self.listbox_index < len(mask_paths):
+                        path_to_remove = mask_paths[self.listbox_index]
+                    self.mask_handler.delete_mask(path_to_remove)
+                except:
+                    pass
 
                 if len(coords) == 4:
                     x1, y1, x2, y2 = coords
@@ -930,7 +933,7 @@ class VideoAnnotationHandler():
 
         videos = [
             i for i in os.listdir(image_folder)
-            if i.lower().endswith(('.mov'))
+            if i.lower().endswith(('.mp4'))
         ]
 
         # Lade Annotationen aus CSV oder gespeicherter Quelle
@@ -987,7 +990,7 @@ class VideoAnnotationHandler():
 
         videos = [
             i for i in os.listdir(self.image_folder)
-            if i.lower().endswith(('.mov'))
+            if i.lower().endswith(('.mp4'))
         ]
 
         for video in videos:
