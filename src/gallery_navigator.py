@@ -617,7 +617,7 @@ class GalleryNavigator:
         # Tracking-Dropdown
         self.tracking_type = tk.StringVar()
         tracking_dropdown = ttk.Combobox(tracker_controls_row, textvariable=self.tracking_type,
-                                        values=["Simple", "SAM 2"], width=12)
+                                        values=["Simple", "SAM 2", "MedSAM 2"], width=12)
         tracking_dropdown.pack(side="left", padx=5)
         tracking_dropdown.current(0)
 
@@ -735,6 +735,15 @@ class GalleryNavigator:
         
         return answer
     
+    def ask_for_medsam2_download(self):
+        answer = messagebox.askyesno(
+            "Downloading MedSAM2",
+            f"The MedSAM2 model is not yet loaded. Should this model be loaded?",
+            parent=self.patient_window
+        )
+        
+        return answer
+    
 
 
     def toggle_mask_visibility(self):
@@ -792,13 +801,15 @@ class GalleryNavigator:
 
         def worker():
             try:
-                self.sam2_tracking.sam2_tracking_method()
+                # Execute the callback function if provided, otherwise default to SAM2
+                if on_complete:
+                    on_complete()
+                else:
+                    self.sam2_tracking.sam2_tracking_method()
             finally:
                 def cleanup():
                     spinner.stop()
                     popup.destroy()
-                    if on_complete:
-                        on_complete()
 
                 self.patient_window.after(0, cleanup)
 

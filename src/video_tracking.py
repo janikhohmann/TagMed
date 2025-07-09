@@ -19,19 +19,20 @@ from config_handler import ConfigHandler
 from video_annotation_handler import VideoAnnotationHandler
 from mask_handler import MaskHandler
 from sam2_tracking import SAM2Tracking
+from medsam2_tracking import MedSAM2Tracking
 
 class  VideoTracking:
     def __init__(self, gui):
         self.gui = gui
         self.video_annotation_handler = VideoAnnotationHandler(gui)
         self.sam2_tracking = SAM2Tracking(gui)
+        self.medsam2_tracking = MedSAM2Tracking(gui)
 
         self.mask_handler = MaskHandler(gui)
         
         config = ConfigHandler()
         self.selected_image_folder = config.get("selected_image_folder")
         self.image_size = config.get("image_size")
-
 
 
 
@@ -53,9 +54,17 @@ class  VideoTracking:
             available = self.sam2_tracking.check_if_sam_2_is_available() # option to download different models
 
             if available:
-                #self.sam2_tracking_method()
-                self.gui.wait_for_tracking_gui(on_complete=None)
+                self.gui.wait_for_tracking_gui(on_complete=lambda: self.sam2_tracking.sam2_tracking_method())
             else:
+                return
+
+        if tracking_type == "MedSAM 2":
+            available = self.medsam2_tracking.check_if_medsam2_is_available() # option to download MedSAM2 model
+
+            if available:
+                self.gui.wait_for_tracking_gui(on_complete=lambda: self.medsam2_tracking.medsam2_tracking_method())
+            else:
+                return
                 return
 
 
