@@ -31,10 +31,10 @@ class MedSAM2Tracking:
         # Define the URLs for MedSAM2 checkpoints
         MEDSAM2_BASE_URL = "https://huggingface.co/wanglab/MedSAM2/resolve/main"
         self.medsam2_latest_url = f"{MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
-        self.medsam2_2411_url = f"{MEDSAM2_BASE_URL}/MedSAM2_2411.pt"
         self.medsam2_us_heart_url = f"{MEDSAM2_BASE_URL}/MedSAM2_US_Heart.pt"
         self.medsam2_mri_liver_url = f"{MEDSAM2_BASE_URL}/MedSAM2_MRI_LiverLesion.pt"
-        self.medsam2_ct_lesion_url = f"{MEDSAM2_BASE_URL}/MedSAM2_CTLesion.pt"
+        # self.medsam2_2411_url = f"{MEDSAM2_BASE_URL}/MedSAM2_2411.pt"
+        # self.medsam2_ct_lesion_url = f"{MEDSAM2_BASE_URL}/MedSAM2_CTLesion.pt"
 
         model_dir = "../models"  # Directory where the model is saved
         self.abs_model_dir = os.path.abspath(model_dir)

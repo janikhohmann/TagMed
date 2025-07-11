@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 
 from config_handler import ConfigHandler
 from video_tracking import VideoTracking
+from sam2_tracking import SAM2Tracking
 from mask_handler import MaskHandler
 
 
@@ -26,6 +27,7 @@ class ImageMaskPredictor:
         self.mask_handler = MaskHandler(gui)
         
         self.video_tracking = VideoTracking(gui)
+        self.sam2_tracking = SAM2Tracking(gui)
         sam2_predictor = None
 
 
@@ -37,7 +39,7 @@ class ImageMaskPredictor:
 
 
     def predict_mask_for_image_bb(self, df_index, x,y,w,h):
-        self.video_tracking.check_if_sam_2_is_available()
+        self.sam2_tracking.check_if_sam_2_is_available()
 
 
         input_box = self.center_to_corners(x, y, w, h)
@@ -57,8 +59,8 @@ class ImageMaskPredictor:
         
 
         if not hasattr(self, "sam2_predictor") or self.sam2_predictor is None:
-            self.video_tracking.load_sam2_model()
-        predictor = self.video_tracking.sam2_predictor
+            self.sam2_tracking.load_sam2_model()
+        predictor = self.sam2_tracking.sam2_predictor
 
         image_bgr = cv2.imread(frame_path)
         if image_bgr is None:
