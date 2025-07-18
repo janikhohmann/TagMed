@@ -93,74 +93,62 @@ class MedSAM2Tracking:
                     os.remove(self.medsam2_model_path)
                 return None
 
-
       
     def load_medsam2_model(self):
-            """
-            Loads the MedSAM2 video predictor for video tracking.
-            Based on the official MedSAM2 notebook implementation.
-            """
-            try:
-                from sam2.build_sam import build_sam2_video_predictor
-                # Import torch._dynamo for the fix
-                import torch._dynamo as dynamo
+        """
+        Loads the MedSAM2 video predictor for video tracking.
+        Using Hydra to load the custom config file.
+        """
+        try:
+            from sam2.build_sam import build_sam2_video_predictor
+            
+            # Disable torch compilation and inductor optimizations that cause hanging
+            torch._dynamo.config.disable = True
+            torch._inductor.config.disable_progress = True
+            torch._inductor.config.triton.unique_kernel_names = True
+            
+            # Set float32 precision for better compatibility
+            torch.set_float32_matmul_precision('high')
 
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                print(f"[INFO] Loading MedSAM2 video predictor on {device}")
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"[INFO] Loading MedSAM2 video predictor on {device}")
 
-                if not os.path.exists(self.medsam2_model_path):
-                    print(f"[ERROR] MedSAM2 model file not found at: {self.medsam2_model_path}")
-                    print("[INFO] Please ensure the MedSAM2 model is downloaded.")
-                    self.medsam2_predictor = None
-                    return
-
-                if device == "cuda":
-                    torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
-                    if torch.cuda.get_device_properties(0).major >= 8:
-                        torch.backends.cuda.matmul.allow_tf32 = True
-                        torch.backends.cudnn.allow_tf32 = True
-                elif device == "mps":
-                    print("\n[WARNING] MPS support is preliminary and may cause degraded performance.")
-
-                if GlobalHydra.instance().is_initialized():
-                    GlobalHydra.instance().clear()
-
-                config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
-                config_name = "sam2.1_hiera_t512"
-
-                with initialize_config_dir(config_dir=config_path, version_base=None):
-                    print(f"[INFO] Loading MedSAM2 from checkpoint: {self.medsam2_model_path}")
-                    print(f"[INFO] Using config file: {config_name}")
-
-                    self.medsam2_predictor = build_sam2_video_predictor(
-                        config_file=config_name,
-                        ckpt_path=self.medsam2_model_path,
-                        apply_postprocessing=True,
-                        vos_optimized=True,
-                    )
-
-
-                # ====================================================================
-                # We prevent the image encoder from ever
-                # being compiled by torch._dynamo. This avoids the CUDAGraphs error
-                # at the cost of performance for the encoder part.
-                
-                print("[INFO] Applying torch.dynamo.disable() to image_encoder to prevent CUDAGraphs crash.")
-                self.medsam2_predictor.image_encoder.forward = dynamo.disable(
-                    self.medsam2_predictor.image_encoder.forward
-                )
-                print("[INFO] Image encoder compilation disabled. Tracking will be slower but stable.")
-                # ====================================================================
-
-
-                self.inference_state = None
-                print("[INFO] MedSAM2 video predictor successfully loaded.")
-
-            except Exception as e:
-                import traceback
-                print(f"[ERROR] Failed to load MedSAM2 video predictor: {e}")
-                traceback.print_exc()
+            # Check if model file exists
+            if not os.path.exists(self.medsam2_model_path):
+                print(f"[ERROR] MedSAM2 model file not found at: {self.medsam2_model_path}")
+                print("[INFO] Please ensure the MedSAM2 model is downloaded.")
                 self.medsam2_predictor = None
+                return
+
+            # Clean previous Hydra initialization
+            if GlobalHydra.instance().is_initialized():
+                GlobalHydra.instance().clear()
+
+            # Path to custom config
+            config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
+            config_name = "sam2.1_hiera_t512"
+
+            print(f"[INFO] Loading MedSAM2 from checkpoint: {self.medsam2_model_path}")
+            print(f"[INFO] Using config file: {config_name}")
+
+            # Initialize Hydra config context
+            with initialize_config_dir(config_dir=config_path, version_base=None):
+                # Build the predictor (Hydra will now compose internally)
+                self.medsam2_predictor = build_sam2_video_predictor(
+                    config_file=config_name,
+                    ckpt_path=self.medsam2_model_path,
+                    apply_postprocessing=True,
+                    vos_optimized=True,
+                )
+
+            self.inference_state = None
+            print("[INFO] MedSAM2 video predictor successfully loaded.")
+
+        except Exception as e:
+            import traceback
+            print(f"[ERROR] Failed to load MedSAM2 video predictor: {e}")
+            traceback.print_exc()
+            self.medsam2_predictor = None
 
 
 
@@ -186,14 +174,16 @@ class MedSAM2Tracking:
 
 
 
-        print("[INFO] Forcing a fresh load of the MedSAM2 predictor to ensure clean state.")
-        self.load_medsam2_model()
-
+        # Check if we have the video predictor loaded
+        if not hasattr(self, "medsam2_predictor") or self.medsam2_predictor is None:
+            print("[INFO] MedSAM2 predictor not loaded, attempting to load...")
+            self.load_medsam2_model()
+            
         # Verify predictor is loaded after attempt
         if self.medsam2_predictor is None:
             print("[ERROR] Failed to load MedSAM2 predictor. Cannot proceed with tracking.")
             return
-        
+            
         predictor = self.medsam2_predictor
 
         # Initialize video sequence - create a temporary directory with frames
@@ -214,7 +204,15 @@ class MedSAM2Tracking:
             print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
             print(f"[DEBUG] Number of frames: {len(current_frames)}")
             print(f"[DEBUG] Current frame index: {current_frame_index}")
-            self.inference_state = predictor.init_state(video_path=temp_video_dir)
+            
+            try:
+                print("[DEBUG] Calling predictor.init_state()...")
+                self.inference_state = predictor.init_state(video_path=temp_video_dir)
+                print("[DEBUG] init_state() completed successfully")
+            except Exception as e:
+                print(f"[ERROR] Failed to initialize inference state: {e}")
+                self._cleanup_temp_directory(temp_video_dir)
+                return
 
             # Check if Polygon or Bounding Box
             selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
@@ -270,13 +268,20 @@ class MedSAM2Tracking:
                     points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
                     labels = np.array([1], np.int32)  # Positive click
                     
-                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                        inference_state=self.inference_state,
-                        frame_idx=current_frame_index,
-                        obj_id=ann_obj_id,
-                        points=points,
-                        labels=labels,
-                    )
+                    print(f"[DEBUG] Adding points for polygon tracking: points={points}, labels={labels}, obj_id={ann_obj_id}")
+                    try:
+                        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                            inference_state=self.inference_state,
+                            frame_idx=current_frame_index,
+                            obj_id=ann_obj_id,
+                            points=points,
+                            labels=labels,
+                        )
+                        print(f"[DEBUG] add_new_points_or_box completed successfully for polygon")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to add points for polygon tracking: {e}")
+                        self._cleanup_temp_directory(temp_video_dir)
+                        return
 
                 except IndexError:
                     print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
@@ -329,12 +334,18 @@ class MedSAM2Tracking:
                     print(f"[DEBUG] Starting MedSAM2 tracking with bbox: x={x}, y={y}, w={w}, h={h}")
                     print(f"[DEBUG] MedSAM2 input_box: {input_box}")
                     
-                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                        inference_state=self.inference_state,
-                        frame_idx=current_frame_index,
-                        obj_id=ann_obj_id,
-                        box=input_box,
-                    )
+                    try:
+                        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                            inference_state=self.inference_state,
+                            frame_idx=current_frame_index,
+                            obj_id=ann_obj_id,
+                            box=input_box,
+                        )
+                        print(f"[DEBUG] add_new_points_or_box completed successfully for bounding box")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to add bounding box for tracking: {e}")
+                        self._cleanup_temp_directory(temp_video_dir)
+                        return
 
                 except IndexError:
                     print(f"[ERROR] Bounding box index {selected_annotation_index} out of range.")
@@ -346,11 +357,25 @@ class MedSAM2Tracking:
             
             # Collect results in a dict
             video_segments = {}
-            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.inference_state):
-                video_segments[out_frame_idx] = {
-                    out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
-                    for i, out_obj_id in enumerate(out_obj_ids)
-                }
+            try:
+                print("[DEBUG] Starting propagate_in_video()...")
+                frame_count = 0
+                for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.inference_state):
+                    frame_count += 1
+                    if frame_count % 10 == 0:  # Progress indicator every 10 frames
+                        print(f"[DEBUG] Processed {frame_count} frames...")
+                    
+                    video_segments[out_frame_idx] = {
+                        out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                        for i, out_obj_id in enumerate(out_obj_ids)
+                    }
+                print(f"[DEBUG] propagate_in_video() completed successfully. Processed {frame_count} frames.")
+            except Exception as e:
+                print(f"[ERROR] Failed during video propagation: {e}")
+                import traceback
+                traceback.print_exc()
+                self._cleanup_temp_directory(temp_video_dir)
+                return
 
             # Process results for frames starting from current frame
             frames_processed = 0

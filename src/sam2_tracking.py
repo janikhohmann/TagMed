@@ -6,6 +6,8 @@ import ast
 import tqdm
 import torch
 import pandas as pd
+from hydra import compose, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 
 from config_handler import ConfigHandler
 from video_annotation_handler import VideoAnnotationHandler
@@ -61,9 +63,9 @@ class SAM2Tracking:
 
         # Überprüfen, ob die Datei bereits existiert
         if os.path.exists(self.sam2_model_l_path):
-            print(f"SAM2-Modell existiert bereits unter: {self.sam2_model_l_path}")
+            print(f"SAM2 model already exists at: {self.sam2_model_l_path}")
         else:
-            print(f"Versuche, SAM2-Modell herunterzuladen nach: {self.sam2_model_l_path}")
+            print(f"Trying to download SAM2 model to: {self.sam2_model_l_path}")
             try:
                 response = requests.get(self.sam2p1_hiera_l_url, stream=True)
                 response.raise_for_status()  # Fehler auslösen bei Problemen
@@ -85,9 +87,9 @@ class SAM2Tracking:
 
             except requests.exceptions.RequestException as e:
                 print(f"Error downloading the SAM2 model: {e}")
-                if os.path.exists(self.sam2_model_l_path): # Lösche unvollständige Datei bei Fehler
+                if os.path.exists(self.sam2_model_l_path): # Delete incomplete file on error
                     os.remove(self.sam2_model_l_path)
-                return None # Signalisiert einen Fehler
+                return None # Signals an error
             except Exception as e:
                 print(f"An unexpected error has occurred during the download:{e}")
                 if os.path.exists(self.sam2_model_l_path):
@@ -95,39 +97,54 @@ class SAM2Tracking:
                 return None
 
 
-
-
     def load_sam2_model(self):
         """
-        Loads the SAM2 video predictor for video tracking.
-        This should be called once during initialization.
+        Loads the MedSAM2 video predictor for video tracking.
+        Using Hydra to load the custom config file.
         """
         try:
             from sam2.build_sam import build_sam2_video_predictor
             
+            # Disable torch compilation and inductor optimizations that cause hanging
+            torch._dynamo.config.disable = True
+            torch._inductor.config.disable_progress = True
+            torch._inductor.config.triton.unique_kernel_names = True
+            
+            # Set float32 precision for better compatibility
+            torch.set_float32_matmul_precision('high')
+
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            print(f"[INFO] Loading SAM2 video predictor on {device}")
-            
-            # Set device-specific configurations
-            if device == "cuda":
-                # use bfloat16 for the entire workflow
-                torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
-                # turn on tfloat32 for Ampere GPUs
-                if torch.cuda.get_device_properties(0).major >= 8:
-                    torch.backends.cuda.matmul.allow_tf32 = True
-                    torch.backends.cudnn.allow_tf32 = True
-            elif device == "mps":
-                print(
-                    "\nSupport for MPS devices is preliminary. SAM 2 is trained with CUDA and might "
-                    "give numerically different outputs and sometimes degraded performance on MPS."
+            print(f"[INFO] Loading MedSAM2 video predictor on {device}")
+
+            # Check if model file exists
+            if not os.path.exists(self.sam2_model_l_path):
+                print(f"[ERROR] MedSAM2 model file not found at: {self.sam2_model_l_path}")
+                print("[INFO] Please ensure the MedSAM2 model is downloaded.")
+                self.sam2_predictor = None
+                return
+
+            # Clean previous Hydra initialization
+            if GlobalHydra.instance().is_initialized():
+                GlobalHydra.instance().clear()
+
+            # Path to custom config
+            config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
+            config_name = "sam2.1_hiera_l.yaml"
+
+            print(f"[INFO] Loading SAM2 from checkpoint: {self.sam2_model_l_path}")
+            print(f"[INFO] Using config file: {config_name}")
+
+            # Initialize Hydra config context
+            with initialize_config_dir(config_dir=config_path, version_base=None):
+                # Build the predictor (Hydra will now compose internally)
+                self.sam2_predictor = build_sam2_video_predictor(
+                    config_file=config_name,
+                    ckpt_path=self.sam2_model_l_path,
+                    apply_postprocessing=True,
+                    vos_optimized=True,
                 )
-            
-            # Use the downloaded model checkpoint
-            sam2_checkpoint = self.sam2_model_l_path
-            model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
-            
-            self.sam2_predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
-            self.inference_state = None  # Will be initialized per video sequence
+
+            self.inference_state = None
             print("[INFO] SAM2 video predictor successfully loaded.")
 
         except Exception as e:
@@ -135,6 +152,45 @@ class SAM2Tracking:
             print(f"[ERROR] Failed to load SAM2 video predictor: {e}")
             traceback.print_exc()
             self.sam2_predictor = None
+
+    # def load_sam2_model(self):
+    #     """
+    #     Loads the SAM2 video predictor for video tracking.
+    #     This should be called once during initialization.
+    #     """
+    #     try:
+    #         from sam2.build_sam import build_sam2_video_predictor
+            
+    #         device = "cuda" if torch.cuda.is_available() else "cpu"
+    #         print(f"[INFO] Loading SAM2 video predictor on {device}")
+            
+    #         # Set device-specific configurations
+    #         if device == "cuda":
+    #             # use bfloat16 for the entire workflow
+    #             torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
+    #             # turn on tfloat32 for Ampere GPUs
+    #             if torch.cuda.get_device_properties(0).major >= 8:
+    #                 torch.backends.cuda.matmul.allow_tf32 = True
+    #                 torch.backends.cudnn.allow_tf32 = True
+    #         elif device == "mps":
+    #             print(
+    #                 "\nSupport for MPS devices is preliminary. SAM 2 is trained with CUDA and might "
+    #                 "give numerically different outputs and sometimes degraded performance on MPS."
+    #             )
+            
+    #         # Use the downloaded model checkpoint
+    #         sam2_checkpoint = self.sam2_model_l_path
+    #         model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
+            
+    #         self.sam2_predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
+    #         self.inference_state = None  # Will be initialized per video sequence
+    #         print("[INFO] SAM2 video predictor successfully loaded.")
+
+    #     except Exception as e:
+    #         import traceback
+    #         print(f"[ERROR] Failed to load SAM2 video predictor: {e}")
+    #         traceback.print_exc()
+    #         self.sam2_predictor = None
 
 
             
@@ -165,153 +221,177 @@ class SAM2Tracking:
         # Initialize video sequence - create a temporary directory with frames
         video_path = os.path.join(self.selected_image_folder, self.gui.patient_id, self.gui.selected_exam)
         temp_video_dir = self._create_temp_video_directory(video_path, current_frames)
-        
-        # Reset any previous state and initialize for this video sequence
-        if hasattr(self, 'inference_state') and self.inference_state is not None:
-            predictor.reset_state(self.inference_state)
-        
-        resize_h, resize_w = self.image_size
 
-        print(f"[INFO] Initializing SAM2 video predictor for temp video path: {temp_video_dir}")
-        print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
-        print(f"[DEBUG] Number of frames: {len(current_frames)}")
-        print(f"[DEBUG] Current frame index: {current_frame_index}")
-        self.inference_state = predictor.init_state(video_path=temp_video_dir)
+        try:
+            # Reset any previous state and initialize for this video sequence
+            if hasattr(self, 'inference_state') and self.inference_state is not None:
+                try:
+                    predictor.reset_state(self.inference_state)
+                except:
+                    pass  # Ignore reset errors
+            
+            resize_h, resize_w = self.image_size
 
-        # Check if Polygon or Bounding Box
-        selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
-        is_polygon = "Polygon" in selected_text
-
-        
-
-        # ===== POLYGON TRACKING =====
-        if is_polygon:
-            print("[INFO] Starting SAM2 video polygon tracking...")
+            print(f"[INFO] Initializing MedSAM2 video predictor for temp video path: {temp_video_dir}")
+            print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
+            print(f"[DEBUG] Number of frames: {len(current_frames)}")
+            print(f"[DEBUG] Current frame index: {current_frame_index}")
             
             try:
-                # Get polygon data from dataframe
-                polygon_list = self._safe_parse_list(row.get('polygon'))
-                polygon_class_list = self._safe_parse_list(row.get('class_polygon'))
-                    
-                polygon = polygon_list[selected_annotation_index]
-                selected_class = polygon_class_list[selected_annotation_index]
+                print("[DEBUG] Calling predictor.init_state()...")
+                self.inference_state = predictor.init_state(video_path=temp_video_dir)
+                print("[DEBUG] init_state() completed successfully")
+            except Exception as e:
+                print(f"[ERROR] Failed to initialize inference state: {e}")
+                self._cleanup_temp_directory(temp_video_dir)
+                return
+            
+        
+        # # Reset any previous state and initialize for this video sequence
+        # if hasattr(self, 'inference_state') and self.inference_state is not None:
+        #     predictor.reset_state(self.inference_state)
+        
+        # resize_h, resize_w = self.image_size
 
-                if not isinstance(polygon, list) or len(polygon) < 3:
-                    print("[ERROR] Invalid polygon data - need at least 3 points.")
+        # print(f"[INFO] Initializing SAM2 video predictor for temp video path: {temp_video_dir}")
+        # print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
+        # print(f"[DEBUG] Number of frames: {len(current_frames)}")
+        # print(f"[DEBUG] Current frame index: {current_frame_index}")
+        # self.inference_state = predictor.init_state(video_path=temp_video_dir)
+
+        # Check if Polygon or Bounding Box
+            selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
+            is_polygon = "Polygon" in selected_text
+
+            
+
+            # ===== POLYGON TRACKING =====
+            if is_polygon:
+                print("[INFO] Starting SAM2 video polygon tracking...")
+                
+                try:
+                    # Get polygon data from dataframe
+                    polygon_list = self._safe_parse_list(row.get('polygon'))
+                    polygon_class_list = self._safe_parse_list(row.get('class_polygon'))
+                        
+                    polygon = polygon_list[selected_annotation_index]
+                    selected_class = polygon_class_list[selected_annotation_index]
+
+                    if not isinstance(polygon, list) or len(polygon) < 3:
+                        print("[ERROR] Invalid polygon data - need at least 3 points.")
+                        self._cleanup_temp_directory(temp_video_dir)
+                        return
+
+                    # Convert polygon to points for SAM2 (using polygon centroid as positive click)
+                    points_array = np.array(polygon).reshape(-1, 2)
+                    
+                    # Scale polygon coordinates from GUI size to original frame size
+                    original_frame_path = os.path.join(video_path, current_frames[current_frame_index])
+                    if os.path.exists(original_frame_path):
+                        import cv2
+                        original_frame = cv2.imread(original_frame_path)
+                        original_height, original_width = original_frame.shape[:2]
+                        
+                        # Scale coordinates from GUI size to original size
+                        scale_x = original_width / resize_w
+                        scale_y = original_height / resize_h
+                        
+                        # Scale all polygon points
+                        scaled_points = points_array.copy().astype(np.float64)  # Convert to float for scaling
+                        scaled_points[:, 0] *= scale_x  # Scale x coordinates
+                        scaled_points[:, 1] *= scale_y  # Scale y coordinates
+                        
+                        centroid_x = int(np.mean(scaled_points[:, 0]))
+                        centroid_y = int(np.mean(scaled_points[:, 1]))
+                        
+                        print(f"[DEBUG] Original polygon centroid: ({np.mean(points_array[:, 0])}, {np.mean(points_array[:, 1])})")
+                        print(f"[DEBUG] Scaled polygon centroid: ({centroid_x}, {centroid_y})")
+                        print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
+                    else:
+                        centroid_x = int(np.mean(points_array[:, 0]))
+                        centroid_y = int(np.mean(points_array[:, 1]))
+                    
+                    # Add the click at the centroid
+                    ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
+                    points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
+                    labels = np.array([1], np.int32)  # Positive click
+                    
+                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                        inference_state=self.inference_state,
+                        frame_idx=current_frame_index,
+                        obj_id=ann_obj_id,
+                        points=points,
+                        labels=labels,
+                    )
+
+                except IndexError:
+                    print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
                     self._cleanup_temp_directory(temp_video_dir)
                     return
 
-                # Convert polygon to points for SAM2 (using polygon centroid as positive click)
-                points_array = np.array(polygon).reshape(-1, 2)
+            else:
+                # ===== BOUNDING BOX TRACKING =====
+                print("[INFO] Starting SAM2 video bounding box tracking...")
                 
-                # Scale polygon coordinates from GUI size to original frame size
-                original_frame_path = os.path.join(video_path, current_frames[current_frame_index])
-                if os.path.exists(original_frame_path):
-                    import cv2
-                    original_frame = cv2.imread(original_frame_path)
-                    original_height, original_width = original_frame.shape[:2]
-                    
-                    # Scale coordinates from GUI size to original size
-                    scale_x = original_width / resize_w
-                    scale_y = original_height / resize_h
-                    
-                    # Scale all polygon points
-                    scaled_points = points_array.copy().astype(np.float64)  # Convert to float for scaling
-                    scaled_points[:, 0] *= scale_x  # Scale x coordinates
-                    scaled_points[:, 1] *= scale_y  # Scale y coordinates
-                    
-                    centroid_x = int(np.mean(scaled_points[:, 0]))
-                    centroid_y = int(np.mean(scaled_points[:, 1]))
-                    
-                    print(f"[DEBUG] Original polygon centroid: ({np.mean(points_array[:, 0])}, {np.mean(points_array[:, 1])})")
-                    print(f"[DEBUG] Scaled polygon centroid: ({centroid_x}, {centroid_y})")
-                    print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
-                else:
-                    centroid_x = int(np.mean(points_array[:, 0]))
-                    centroid_y = int(np.mean(points_array[:, 1]))
-                
-                # Add the click at the centroid
-                ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
-                points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
-                labels = np.array([1], np.int32)  # Positive click
-                
-                _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                    inference_state=self.inference_state,
-                    frame_idx=current_frame_index,
-                    obj_id=ann_obj_id,
-                    points=points,
-                    labels=labels,
-                )
+                try:
+                    x_list = self._safe_parse_list(row.get('x'))
+                    y_list = self._safe_parse_list(row.get('y'))
+                    w_list = self._safe_parse_list(row.get('w'))
+                    h_list = self._safe_parse_list(row.get('h'))
+                    class_list = self._safe_parse_list(row.get('class'))
 
-            except IndexError:
-                print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
-                self._cleanup_temp_directory(temp_video_dir)
-                return
+                    x = x_list[selected_annotation_index]
+                    y = y_list[selected_annotation_index]
+                    w = w_list[selected_annotation_index]
+                    h = h_list[selected_annotation_index]
+                    selected_class = class_list[selected_annotation_index]
 
-        else:
-            # ===== BOUNDING BOX TRACKING =====
-            print("[INFO] Starting SAM2 video bounding box tracking...")
+                    # Convert to SAM2 box format (x0, y0, x1, y1)
+                    # Scale coordinates from GUI size to original frame size
+                    original_frame_path = os.path.join(video_path, current_frames[current_frame_index])
+                    if os.path.exists(original_frame_path):
+                        import cv2
+                        original_frame = cv2.imread(original_frame_path)
+                        original_height, original_width = original_frame.shape[:2]
+                        
+                        # Scale coordinates from GUI size to original size
+                        scale_x = original_width / resize_w
+                        scale_y = original_height / resize_h
+                        
+                        scaled_x = x * scale_x
+                        scaled_y = y * scale_y
+                        scaled_w = w * scale_x
+                        scaled_h = h * scale_y
+                        
+                        print(f"[DEBUG] Original coords: x={x}, y={y}, w={w}, h={h}")
+                        print(f"[DEBUG] Scaled coords: x={scaled_x}, y={scaled_y}, w={scaled_w}, h={scaled_h}")
+                        print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
+                        print(f"[DEBUG] Original frame size: {original_width}x{original_height}, GUI size: {resize_w}x{resize_h}")
+                        
+                        input_box = self.center_to_corners(scaled_x, scaled_y, scaled_w, scaled_h)
+                    else:
+                        input_box = self.center_to_corners(x, y, w, h)
+                    
+                    ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
+
+                    print(f"[DEBUG] Starting tracking with bbox: x={x}, y={y}, w={w}, h={h}")
+                    print(f"[DEBUG] SAM2 input_box: {input_box}")
+                    
+                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                        inference_state=self.inference_state,
+                        frame_idx=current_frame_index,
+                        obj_id=ann_obj_id,
+                        box=input_box,
+                    )
+
+                except IndexError:
+                    print(f"[ERROR] Bounding box index {selected_annotation_index} out of range.")
+                    self._cleanup_temp_directory(temp_video_dir)
+                    return
+
+            # ===== PROPAGATE THROUGH VIDEO =====
+            print("[INFO] Propagating annotations through video...")
             
-            try:
-                x_list = self._safe_parse_list(row.get('x'))
-                y_list = self._safe_parse_list(row.get('y'))
-                w_list = self._safe_parse_list(row.get('w'))
-                h_list = self._safe_parse_list(row.get('h'))
-                class_list = self._safe_parse_list(row.get('class'))
-
-                x = x_list[selected_annotation_index]
-                y = y_list[selected_annotation_index]
-                w = w_list[selected_annotation_index]
-                h = h_list[selected_annotation_index]
-                selected_class = class_list[selected_annotation_index]
-
-                # Convert to SAM2 box format (x0, y0, x1, y1)
-                # Scale coordinates from GUI size to original frame size
-                original_frame_path = os.path.join(video_path, current_frames[current_frame_index])
-                if os.path.exists(original_frame_path):
-                    import cv2
-                    original_frame = cv2.imread(original_frame_path)
-                    original_height, original_width = original_frame.shape[:2]
-                    
-                    # Scale coordinates from GUI size to original size
-                    scale_x = original_width / resize_w
-                    scale_y = original_height / resize_h
-                    
-                    scaled_x = x * scale_x
-                    scaled_y = y * scale_y
-                    scaled_w = w * scale_x
-                    scaled_h = h * scale_y
-                    
-                    print(f"[DEBUG] Original coords: x={x}, y={y}, w={w}, h={h}")
-                    print(f"[DEBUG] Scaled coords: x={scaled_x}, y={scaled_y}, w={scaled_w}, h={scaled_h}")
-                    print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
-                    print(f"[DEBUG] Original frame size: {original_width}x{original_height}, GUI size: {resize_w}x{resize_h}")
-                    
-                    input_box = self.center_to_corners(scaled_x, scaled_y, scaled_w, scaled_h)
-                else:
-                    input_box = self.center_to_corners(x, y, w, h)
-                
-                ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
-
-                print(f"[DEBUG] Starting tracking with bbox: x={x}, y={y}, w={w}, h={h}")
-                print(f"[DEBUG] SAM2 input_box: {input_box}")
-                
-                _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                    inference_state=self.inference_state,
-                    frame_idx=current_frame_index,
-                    obj_id=ann_obj_id,
-                    box=input_box,
-                )
-
-            except IndexError:
-                print(f"[ERROR] Bounding box index {selected_annotation_index} out of range.")
-                self._cleanup_temp_directory(temp_video_dir)
-                return
-
-        # ===== PROPAGATE THROUGH VIDEO =====
-        print("[INFO] Propagating annotations through video...")
-        
-        try:
             # Collect results in a dict
             video_segments = {}
             for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.inference_state):
@@ -423,7 +503,7 @@ class SAM2Tracking:
                                         new_x, new_y, new_w, new_h = self.corners_to_center(x0, y0, x1, y1)
 
                                     for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], 
-                                                      [new_x, new_y, new_w, new_h, selected_class, 'tracking']):
+                                                    [new_x, new_y, new_w, new_h, selected_class, 'tracking']):
                                         existing_list = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, col])
 
                                         # Ensure list is long enough
