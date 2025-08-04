@@ -6,9 +6,10 @@ TagMed is designed to facilitate the annotation of sensitive ultrasound images a
 ## Features
 Medical image annotation, particularly in ultrasound, requires precision, efficiency, and a secure workflow. This tool aims to:
 
-- Provide a simple and intuitive interface for annotating medical data.
+- Provide a simple and intuitive interface for annotating medical data with bounding boxes, polygons and class assignment.
 - Allow creation and classification of bounding boxes on image frames.
-- Support video annotation with automation assistance using [SAM2](https://github.com/facebookresearch/sam2) and [MedSAM2](https://github.com/bowang-lab/MedSAM2/tree/main).
+- Support video annotation with frame navigation and object tracking using the automated assistance of [SAM2](https://github.com/facebookresearch/sam2) and [MedSAM2](https://github.com/bowang-lab/MedSAM2/tree/main).
+- Designed to handle sensitive medical data locally.
     
 ## Quick Start
 
@@ -38,12 +39,13 @@ ImageDatabase
 We recommend that you name or number your images as follows: <br>
 ```
 {num_patient}_{num_exam}_{num_image}
+Example: 000001_01_00001
 ```
-
-Example: 000001_01_00001<br>
-<br>
-Videos should be named in the same pattern. If your videos already are framed add the frame number as suffix.<br>
+Videos should be named in the same pattern. If your videos already are framed add the frame number as suffix.
+```
+{num_patient}_{num_exam}_{num_image}_frame{num_frame}
 Example: 000001_01_00001_frame00001
+```
 
 ## Citation
 If you use TagMed in your research, please cite:
@@ -90,3 +92,7 @@ EfficientTAM
 For questions, issues, or contributions:
 - Create an issue on GitHub
 - Email: [Janik.Hohmann@med.uni-duesseldorf.de]
+
+## License
+Please use this tool under **Licence** with citing our paper.<br>
+Design: Copyright (c) 2021 [rdbende](https://github.com/rdbende/Azure-ttk-theme) with MIT License. 

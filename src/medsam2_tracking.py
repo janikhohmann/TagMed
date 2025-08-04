@@ -29,22 +29,32 @@ class MedSAM2Tracking:
         self.image_size = config.get("image_size", (600, 600))  # Default image size if not set
 
         # Define the URLs for MedSAM2 checkpoints
-        MEDSAM2_BASE_URL = "https://huggingface.co/wanglab/MedSAM2/resolve/main"
-        self.medsam2_latest_url = f"{MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
-        self.medsam2_us_heart_url = f"{MEDSAM2_BASE_URL}/MedSAM2_US_Heart.pt"
-        self.medsam2_mri_liver_url = f"{MEDSAM2_BASE_URL}/MedSAM2_MRI_LiverLesion.pt"
-        # self.medsam2_2411_url = f"{MEDSAM2_BASE_URL}/MedSAM2_2411.pt"
-        # self.medsam2_ct_lesion_url = f"{MEDSAM2_BASE_URL}/MedSAM2_CTLesion.pt"
-
+        self.MEDSAM2_BASE_URL = "https://huggingface.co/wanglab/MedSAM2/resolve/main"
         model_dir = "../models"  # Directory where the model is saved
         self.abs_model_dir = os.path.abspath(model_dir)
-
-        # Use MedSAM2_latest.pt as the default model
+        # set a fallback model
+        self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
         self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_latest.pt")
+        
+
         self.medsam2_predictor = None
         self.inference_state = None  # For video tracking state
 
     def check_if_medsam2_is_available(self):
+        if self.gui.tracking_type.get() == "MedSAM2":
+            self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
+            self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_latest.pt")
+            self.config_name = "sam2.1_hiera_t512"
+
+        if self.gui.tracking_type.get() == "MedSAM2 US Heart":
+            self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_US_Heart.pt"
+            self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_US_Heart.pt")
+            self.config_name = "sam2.1_hiera_t512"
+
+        if self.gui.tracking_type.get() == "MedSAM2 MRI Liver Lesion":
+            self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_MRI_LiverLesion.pt"
+            self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_MRI_LiverLesion.pt")
+
         if os.path.exists(self.medsam2_model_path):
             return True
         else:
@@ -65,7 +75,7 @@ class MedSAM2Tracking:
         else:
             print(f"Trying to download MedSAM2 model to: {self.medsam2_model_path}")
             try:
-                response = requests.get(self.medsam2_latest_url, stream=True)
+                response = requests.get(self.medsam2_url, stream=True)
                 response.raise_for_status()  # Raise errors on problems
 
                 total_size = int(response.headers.get('content-length', 0))
@@ -126,16 +136,15 @@ class MedSAM2Tracking:
 
             # Path to custom config
             config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
-            config_name = "sam2.1_hiera_t512"
 
             print(f"[INFO] Loading MedSAM2 from checkpoint: {self.medsam2_model_path}")
-            print(f"[INFO] Using config file: {config_name}")
+            print(f"[INFO] Using config file: {self.config_name}")
 
             # Initialize Hydra config context
             with initialize_config_dir(config_dir=config_path, version_base=None):
                 # Build the predictor (Hydra will now compose internally)
                 self.medsam2_predictor = build_sam2_video_predictor(
-                    config_file=config_name,
+                    config_file=self.config_name,
                     ckpt_path=self.medsam2_model_path,
                     apply_postprocessing=True,
                     vos_optimized=True,

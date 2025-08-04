@@ -65,7 +65,23 @@ class  VideoTracking:
                 self.gui.wait_for_tracking_gui(on_complete=lambda: self.medsam2_tracking.medsam2_tracking_method())
             else:
                 return
+            
+        if tracking_type == "MedSAM2 US Heart":
+            available = self.medsam2_tracking.check_if_medsam2_is_available() # option to download MedSAM2 model
+
+            if available:
+                self.gui.wait_for_tracking_gui(on_complete=lambda: self.medsam2_tracking.medsam2_tracking_method())
+            else:
                 return
+            
+        if tracking_type == "MedSAM2 MRI Liver Lesion":
+            available = self.medsam2_tracking.check_if_medsam2_is_available() # option to download MedSAM2 model
+
+            if available:
+                self.gui.wait_for_tracking_gui(on_complete=lambda: self.medsam2_tracking.medsam2_tracking_method())
+            else:
+                return
+
 
 
 # ===== SIMPLE METHOD =====

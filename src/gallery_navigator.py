@@ -617,7 +617,7 @@ class GalleryNavigator:
         # Tracking-Dropdown
         self.tracking_type = tk.StringVar()
         tracking_dropdown = ttk.Combobox(tracker_controls_row, textvariable=self.tracking_type,
-                                        values=["Simple", "SAM 2", "MedSAM 2"], width=12)
+                                        values=["Simple", "SAM 2", "MedSAM 2", "MedSAM2 US Heart", "MedSAM2 MRI Liver Lesion"], width=20)
         tracking_dropdown.pack(side="left", padx=5)
         tracking_dropdown.current(0)
 
