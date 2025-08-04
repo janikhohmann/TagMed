@@ -6,9 +6,9 @@ TagMed is designed to facilitate the annotation of sensitive ultrasound images a
 ## Features
 Medical image annotation, particularly in ultrasound, requires precision, efficiency, and a secure workflow. This tool aims to:
 
-    Provide a simple and intuitive interface for annotating medical data.
-    Allow creation and classification of bounding boxes on image frames.
-    Support video annotation with automation assistance using [SAM2](https://github.com/facebookresearch/sam2) and [MedSAM2](https://github.com/bowang-lab/MedSAM2/tree/main).
+- Provide a simple and intuitive interface for annotating medical data.
+- Allow creation and classification of bounding boxes on image frames.
+- Support video annotation with automation assistance using [SAM2](https://github.com/facebookresearch/sam2) and [MedSAM2](https://github.com/bowang-lab/MedSAM2/tree/main).
     
 ## Quick Start
 
@@ -35,12 +35,14 @@ ImageDatabase
 ├── Patient 2
     ├── Exam 1
 ```
-We recommend that you name or number your images as follows:
+We recommend that you name or number your images as follows: <br>
+```
 {num_patient}_{num_exam}_{num_image}
+```
 
-Example: 000001_01_00001
-
-Videos should be named in the same pattern. If your videos already are framed add the frame number as suffix.
+Example: 000001_01_00001<br>
+<br>
+Videos should be named in the same pattern. If your videos already are framed add the frame number as suffix.<br>
 Example: 000001_01_00001_frame00001
 
 ## Citation
