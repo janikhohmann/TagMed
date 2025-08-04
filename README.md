@@ -94,5 +94,5 @@ For questions, issues, or contributions:
 - Email: [Janik.Hohmann@med.uni-duesseldorf.de]
 
 ## License
-Please use this tool under **Licence** with citing our paper.<br>
+Please use this tool under **License [TO BE DONE]** with citing our paper.<br>
 Design: Copyright (c) 2021 [rdbende](https://github.com/rdbende/Azure-ttk-theme) with MIT License. 
