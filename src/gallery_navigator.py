@@ -462,7 +462,7 @@ class GalleryNavigator:
             self.image_canvas.bind("<B1-Motion>", self.img_annotation_handler.on_drag)
             self.image_canvas.bind("<ButtonRelease-1>", self.img_annotation_handler.on_release)
         else:
-            print("Warnung: self.image_canvas ist nicht initialisiert. Bindings nicht gesetzt.")
+            print("Warning: self.image_canvas is not initialized. Bindings not set.")
 
         # # Slider + zusätzliche Steuerungen (Spalte 3) - stays empty for images
         slider_frame = tk.Frame(bottom_frame, width=600, height=150)

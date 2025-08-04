@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import hydra
 from hydra.core.global_hydra import GlobalHydra
+from hydra import compose, initialize_config_dir
 import matplotlib.pyplot as plt
 
 
@@ -28,7 +29,16 @@ class ImageMaskPredictor:
         
         self.video_tracking = VideoTracking(gui)
         self.sam2_tracking = SAM2Tracking(gui)
-        sam2_predictor = None
+        sam2_image_predictor = None
+        device = None
+        
+        model_dir = "../models"  # Directory where the model is saved
+        self.abs_model_dir = os.path.abspath(model_dir)
+        # set a fallback model
+        self.sam2_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
+        self.config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
+        self.config_name = "sam2.1_hiera_l"
+
 
 
         config = ConfigHandler()
@@ -58,9 +68,32 @@ class ImageMaskPredictor:
             annotation_index = selected_annotation[0]
         
 
-        if not hasattr(self, "sam2_predictor") or self.sam2_predictor is None:
-            self.sam2_tracking.load_sam2_model()
-        predictor = self.sam2_tracking.sam2_predictor
+        # if not hasattr(self, "sam2_predictor") or self.sam2_predictor is None:
+        #     self.sam2_tracking.load_sam2_model()
+        # predictor = self.sam2_tracking.sam2_predictor
+        
+
+
+        if not hasattr(self, "sam2_image_predictor") or self.sam2_image_predictor is None:
+            # select the device for computation
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+            elif torch.backends.mps.is_available():
+                device = torch.device("mps")
+            else:
+                device = torch.device("cpu")
+            print(f"using device: {device}")
+
+            # Clean previous Hydra initialization
+            if GlobalHydra.instance().is_initialized():
+                GlobalHydra.instance().clear()
+
+            # Initialize Hydra config context
+            with initialize_config_dir(config_dir=self.config_path, version_base=None):
+                # Build the predictor (Hydra will now compose internally)
+                self.sam2_model = build_sam2(self.config_name, self.sam2_model_path, device=device)
+
+            self.sam2_image_predictor = SAM2ImagePredictor(self.sam2_model)
 
         image_bgr = cv2.imread(frame_path)
         if image_bgr is None:
@@ -71,10 +104,10 @@ class ImageMaskPredictor:
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
 
-        predictor.set_image(image_rgb)
+        self.sam2_image_predictor.set_image(image_rgb)
 
         try:
-            masks, iou_preds, low_res_masks = predictor.predict(box=input_box, multimask_output=False)
+            masks, iou_preds, low_res_masks = self.sam2_image_predictor.predict(box=input_box, multimask_output=False)
     
             if masks[0].sum() == 0:
                 print(f"[INFO] No segmentation for frame {image_id}")
