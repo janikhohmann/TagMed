@@ -45,9 +45,12 @@ class GalleryNavigator:
 
         self.mask_handler = MaskHandler(self)
         self.create_mask_var = tk.BooleanVar(value=False)
+        self.create_frame_mask_var = tk.BooleanVar(value=False)
         self.all_masks = []
         self.drawn_mask_ids = []
         self.mask_dir = "../masks"
+
+        self.selected_image_index = None
 
 
 
@@ -635,9 +638,20 @@ class GalleryNavigator:
         )
         self.mask_toggle_button.pack(side="left", padx=5)
 
+        print("bis hier kommen wir")
+        # Create Mask from Annotation Checkbox
+        self.create_frame_mask_toggle_button = ttk.Checkbutton(
+            tracker_controls_row,
+            text="Create Mask for single frame",
+            variable=self.create_frame_mask_var
+        )
+        self.create_frame_mask_toggle_button.pack(side="left", padx=5)
+
+        print("bis hier kommen wir auch!1")
+
         # Tracker Prompt Button (Platzhalter)
-        tracker_prompt_button = tk.Button(tracker_controls_row, text="Tracker Prompts", width=16)
-        tracker_prompt_button.pack(side="left", padx=5)
+        # tracker_prompt_button = tk.Button(tracker_controls_row, text="Tracker Prompts", width=16)
+        # tracker_prompt_button.pack(side="left", padx=5)
 
 
 

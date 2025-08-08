@@ -9,6 +9,7 @@ import numpy as np
 
 from annotation_loader import AnnotationLoader
 from config_handler import ConfigHandler 
+
 from mask_handler import MaskHandler
 
 
@@ -50,11 +51,16 @@ class VideoAnnotationHandler():
         self.is_giving_single_points = False
 
         # mask specific attributes
+        
         self.mask_handler = MaskHandler(self)
 
 
 
     def add_annotation(self):
+
+        from image_mask_predictor import ImageMaskPredictor
+        self.image_mask_predictor = ImageMaskPredictor(gui=self.gui)
+
         img_selected_class = self.gui.video_selected_class.get()
         img_annotation_type = self.gui.video_annotation_type.get()
         image_id = self.current_image_id 
@@ -102,6 +108,10 @@ class VideoAnnotationHandler():
                 self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
 
             self.drawn_rect_ids.append(self.rect_id)
+
+            if self.gui.create_frame_mask_var.get():
+                self.image_mask_predictor.predict_mask_for_image_bb(idx, x, y, w, h)
+
             print(f"[DEBUG] Added Bounding Box with rect_id {self.rect_id}")
 
         # === Polygon Annotation ===
@@ -129,6 +139,10 @@ class VideoAnnotationHandler():
                 self.gui.all_annotations.at[idx, 'class_polygon'], img_selected_class)
             self.gui.all_annotations.at[idx, 'polygon_annotype'] = append_or_init_list(
                 self.gui.all_annotations.at[idx, 'polygon_annotype'], "manually")
+
+            if self.gui.create_frame_mask_var.get():
+                width, height = self.gui.image_size
+                self.image_mask_predictor.predict_mask_for_image_polygon(idx, self.polygon_points.copy(), width, height)
 
             print(f"[DEBUG] Added Polygon with {len(self.polygon_points)} points")
 

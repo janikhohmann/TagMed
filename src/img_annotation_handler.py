@@ -22,6 +22,7 @@ class ImgAnnotationHandler:
         self.resize_handle_size = 3
 
         self.selected_annotation_index = None
+        
 
         self.dragging_handle = None
         self.dragging_rectangle = False

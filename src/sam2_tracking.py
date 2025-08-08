@@ -678,8 +678,8 @@ class SAM2Tracking:
         
         # Simplify contour to reduce number of points --> is not used in the current implementation
         # Uncomment the following lines if you want to simplify the contour
-        # epsilon = 0.01 * cv2.arcLength(contour, True)
-        # contour = cv2.approxPolyDP(contour, epsilon, True)
+        epsilon = 0.005 * cv2.arcLength(contour, True)
+        contour = cv2.approxPolyDP(contour, epsilon, True)
         
 
         polygon_points = []

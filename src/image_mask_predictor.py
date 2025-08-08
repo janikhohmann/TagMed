@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 
 
 from config_handler import ConfigHandler
-from video_tracking import VideoTracking
 from sam2_tracking import SAM2Tracking
 from mask_handler import MaskHandler
 
@@ -27,7 +26,6 @@ class ImageMaskPredictor:
 
         self.mask_handler = MaskHandler(gui)
         
-        self.video_tracking = VideoTracking(gui)
         self.sam2_tracking = SAM2Tracking(gui)
         sam2_image_predictor = None
         device = None
@@ -53,12 +51,24 @@ class ImageMaskPredictor:
 
 
         input_box = self.center_to_corners(x, y, w, h)
-        image_id = self.gui.selected_image_index.split(".")[0]
+
+        # check if an image is selected in the GUI or frame is selected
+        if self.gui.selected_image_index is not None:
+            image_id = self.gui.selected_image_index.split(".")[0]
+            file_name = self.gui.selected_image_index
+        else:
+            # If no image is selected, use the current frame
+            image_id = self.gui.current_frames[self.gui.current_frame_index].split(".")[0]
+            file_name = self.gui.current_frames[self.gui.current_frame_index]
+
+        print(self.gui.selected_image_index, "selected image index")
+        print(f"Predicting mask for image {image_id} with bounding box {input_box}")
+
         frame_path = os.path.join(
             self.selected_image_folder, 
             self.gui.patient_id, 
             self.gui.selected_exam, 
-            self.gui.selected_image_index
+            file_name
             )
         
         if not self.gui.img_annotation_listbox.curselection():
@@ -130,7 +140,16 @@ class ImageMaskPredictor:
         """
         Converts a polygon (list of x,y coordinates) to a binary mask.
         """
-        image_id = self.gui.selected_image_index.split(".")[0]
+
+        # check if an image is selected in the GUI or frame is selected
+        if self.gui.selected_image_index is not None:
+            image_id = self.gui.selected_image_index.split(".")[0]
+            file_name = self.gui.selected_image_index
+        else:
+            # If no image is selected, use the current frame
+            image_id = self.gui.current_frames[self.gui.current_frame_index].split(".")[0]
+            file_name = self.gui.current_frames[self.gui.current_frame_index]
+
 
         if not self.gui.img_annotation_listbox.curselection():
             annotation_index = self.gui.img_annotation_listbox.size() - 1
