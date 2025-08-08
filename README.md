@@ -41,12 +41,12 @@ ImageDatabase
 We recommend that you name or number your images as follows: <br>
 ```
 {num_patient}_{num_exam}_{num_image}
-Example: 000001_01_00001
+Example: 000001_01_00001.jpg
 ```
 Videos should be named in the same pattern. If your videos already are framed add the frame number as suffix.
 ```
 {num_patient}_{num_exam}_{num_image}_frame{num_frame}
-Example: 000001_01_00001_frame00001
+Example: 000001_01_00001_frame00001.jpg
 ```
 
 #### Medical Reports
