@@ -1,5 +1,5 @@
 <img src="resources/images/TagMed_logo.png"> 
-# TagMed
+
 
 ## Overview
 TagMed is designed to facilitate the annotation of sensitive ultrasound images and corresponding medical reports for computer vision projects. 
