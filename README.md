@@ -1,4 +1,16 @@
+# TagMed
 <img src="resources/images/TagMed_logo.png"> 
+
+
+<div align="center">
+ <table align="center">
+   <tr>
+     <td><a href="https://arxiv.org/abs/2504.03600" target="_blank"><img src="https://img.shields.io/badge/arXiv-Paper-FF6B6B?style=for-the-badge&logo=arxiv&logoColor=white" alt="Paper"></a></td>
+     <td><a href="https://www.uniklinik-duesseldorf.de/patienten-besucher/klinikeninstitutezentren/klinik-fuer-gastroenterologie-hepatologie-und-infektiologie/forschung-und-lehre/arbeitsgruppen/ag-luedde" target="_blank"><img           src="https://img.shields.io/badge/Project-Page-4285F4?style=for-the-badge&logoColor=white" alt="AG Lüdde"></a></td>
+     <td><a href="https://github.com/janikhohmann" target="_blank"><img src="https://img.shields.io/badge/GitHub-Code-181717?style=for-the-badge&logo=github&logoColor=white" alt="Code"></a></td>
+   </tr>
+ </table>
+</div>
 
 
 ## Overview
