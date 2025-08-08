@@ -620,7 +620,7 @@ class GalleryNavigator:
         # Tracking-Dropdown
         self.tracking_type = tk.StringVar()
         tracking_dropdown = ttk.Combobox(tracker_controls_row, textvariable=self.tracking_type,
-                                        values=["Simple", "SAM 2", "MedSAM 2", "MedSAM2 US Heart", "MedSAM2 MRI Liver Lesion"], width=20)
+                                        values=["Simple", "SAM2 large", "SAM2 tiny","MedSAM2", "MedSAM2 US Heart", "MedSAM2 MRI Liver Lesion"], width=20)
         tracking_dropdown.pack(side="left", padx=5)
         tracking_dropdown.current(0)
 
@@ -638,7 +638,6 @@ class GalleryNavigator:
         )
         self.mask_toggle_button.pack(side="left", padx=5)
 
-        print("bis hier kommen wir")
         # Create Mask from Annotation Checkbox
         self.create_frame_mask_toggle_button = ttk.Checkbutton(
             tracker_controls_row,
@@ -647,7 +646,6 @@ class GalleryNavigator:
         )
         self.create_frame_mask_toggle_button.pack(side="left", padx=5)
 
-        print("bis hier kommen wir auch!1")
 
         # Tracker Prompt Button (Platzhalter)
         # tracker_prompt_button = tk.Button(tracker_controls_row, text="Tracker Prompts", width=16)

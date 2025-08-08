@@ -50,7 +50,7 @@ class  VideoTracking:
         if tracking_type == "Simple":
             self.simple_tracking_method()
 
-        if tracking_type == "SAM 2":
+        if tracking_type in ["SAM2 large", "SAM2 tiny"]:
             available = self.sam2_tracking.check_if_sam_2_is_available() # option to download different models
 
             if available:
@@ -58,7 +58,7 @@ class  VideoTracking:
             else:
                 return
 
-        if tracking_type == "MedSAM 2":
+        if tracking_type in ["MedSAM2", "MedSAM2 US Heart", "MedSAM2 MRI Liver Lesion"]:
             available = self.medsam2_tracking.check_if_medsam2_is_available() # option to download MedSAM2 model
 
             if available:
@@ -66,21 +66,21 @@ class  VideoTracking:
             else:
                 return
             
-        if tracking_type == "MedSAM2 US Heart":
-            available = self.medsam2_tracking.check_if_medsam2_is_available() # option to download MedSAM2 model
+        # if tracking_type == "MedSAM2 US Heart":
+        #     available = self.medsam2_tracking.check_if_medsam2_is_available() # option to download MedSAM2 model
 
-            if available:
-                self.gui.wait_for_tracking_gui(on_complete=lambda: self.medsam2_tracking.medsam2_tracking_method())
-            else:
-                return
+        #     if available:
+        #         self.gui.wait_for_tracking_gui(on_complete=lambda: self.medsam2_tracking.medsam2_tracking_method())
+        #     else:
+        #         return
             
-        if tracking_type == "MedSAM2 MRI Liver Lesion":
-            available = self.medsam2_tracking.check_if_medsam2_is_available() # option to download MedSAM2 model
+        # if tracking_type == "MedSAM2 MRI Liver Lesion":
+        #     available = self.medsam2_tracking.check_if_medsam2_is_available() # option to download MedSAM2 model
 
-            if available:
-                self.gui.wait_for_tracking_gui(on_complete=lambda: self.medsam2_tracking.medsam2_tracking_method())
-            else:
-                return
+        #     if available:
+        #         self.gui.wait_for_tracking_gui(on_complete=lambda: self.medsam2_tracking.medsam2_tracking_method())
+        #     else:
+        #         return
 
 
 

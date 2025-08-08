@@ -30,16 +30,16 @@ class SAM2Tracking:
 
 
         # Define the URLs for SAM 2.1 checkpoints
-        SAM2p1_BASE_URL="https://dl.fbaipublicfiles.com/segment_anything_2/092824"
-        self.sam2p1_hiera_t_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_tiny.pt"
-        self.sam2p1_hiera_s_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_small.pt"
-        self.sam2p1_hiera_b_plus_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_base_plus.pt"
-        self.sam2p1_hiera_l_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_large.pt"
+        
+
+        # self.sam2p1_hiera_s_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_small.pt"
+        # self.sam2p1_hiera_b_plus_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_base_plus.pt"
+        
 
         model_dir="../models"  # Verzeichnis, in dem das Modell gespeichert wird
         self.abs_model_dir = os.path.abspath(model_dir)
 
-        self.sam2_model_l_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
+        #self.sam2_model_l_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
         self.sam2_predictor = None
         self.inference_state = None  # For video tracking state
 
@@ -47,7 +47,20 @@ class SAM2Tracking:
 
 
     def check_if_sam_2_is_available(self):
-        if os.path.exists(self.sam2_model_l_path):
+        SAM2p1_BASE_URL="https://dl.fbaipublicfiles.com/segment_anything_2/092824"
+        self.config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
+
+        print(self.gui.tracking_type.get())
+        if self.gui.tracking_type.get() == "SAM2 large":
+            self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
+            self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_large.pt"
+            self.config_name = "sam2.1_hiera_l.yaml"
+        if self.gui.tracking_type.get() == "SAM2 tiny":
+            self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_tiny.pt")
+            self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_tiny.pt"
+            self.config_name = "sam2.1_hiera_t.yaml"
+
+        if os.path.exists(self.sam2p1_model_path):
             return True
         else:
             load = self.gui.ask_for_sam2_download()
@@ -62,17 +75,29 @@ class SAM2Tracking:
         os.makedirs(self.abs_model_dir, exist_ok=True)
 
         # Überprüfen, ob die Datei bereits existiert
-        if os.path.exists(self.sam2_model_l_path):
-            print(f"SAM2 model already exists at: {self.sam2_model_l_path}")
+        if os.path.exists(self.sam2p1_model_path):
+            print(f"SAM2 model already exists at: {self.sam2p1_model_path}")
         else:
-            print(f"Trying to download SAM2 model to: {self.sam2_model_l_path}")
+            print(f"Trying to download SAM2 model to: {self.sam2p1_model_path}")
             try:
-                response = requests.get(self.sam2p1_hiera_l_url, stream=True)
+                response = requests.get(self.sam2p1_url, stream=True)
                 response.raise_for_status()  # Fehler auslösen bei Problemen
+                print(f"Downloading SAM2 model from {self.sam2p1_url}...")
 
                 total_size = int(response.headers.get('content-length', 0))
-                with open(self.sam2_model_l_path, 'wb') as file, tqdm(
-                    desc="SAM2 Large Download",
+                # with open(self.sam2p1_model_path, 'wb') as file, tqdm(
+                #     desc="SAM2 Download",
+                #     total=total_size,
+                #     unit='B',
+                #     unit_scale=True,
+                #     unit_divisor=1024
+                # ) as bar:
+                #     for data in response.iter_content(chunk_size=1024):
+                #         file.write(data)
+                #         bar.update(len(data))
+                import tqdm
+                with open(self.sam2p1_model_path, 'wb') as file, tqdm.tqdm(
+                    desc="SAM2 Download",
                     total=total_size,
                     unit='B',
                     unit_scale=True,
@@ -81,25 +106,26 @@ class SAM2Tracking:
                     for data in response.iter_content(chunk_size=1024):
                         file.write(data)
                         bar.update(len(data))
+                        
 
 
-                print(f"SAM2 model successfully downloaded:: {self.sam2_model_l_path}")
+                print(f"SAM2 model successfully downloaded:: {self.sam2p1_model_path}")
 
             except requests.exceptions.RequestException as e:
                 print(f"Error downloading the SAM2 model: {e}")
-                if os.path.exists(self.sam2_model_l_path): # Delete incomplete file on error
-                    os.remove(self.sam2_model_l_path)
+                if os.path.exists(self.sam2p1_model_path): # Delete incomplete file on error
+                    os.remove(self.sam2p1_model_path)
                 return None # Signals an error
             except Exception as e:
                 print(f"An unexpected error has occurred during the download:{e}")
-                if os.path.exists(self.sam2_model_l_path):
-                    os.remove(self.sam2_model_l_path)
+                if os.path.exists(self.sam2p1_model_path):
+                    os.remove(self.sam2p1_model_path)
                 return None
 
 
     def load_sam2_model(self):
         """
-        Loads the MedSAM2 video predictor for video tracking.
+        Loads the SAM2 video predictor for video tracking.
         Using Hydra to load the custom config file.
         """
         try:
@@ -114,11 +140,11 @@ class SAM2Tracking:
             torch.set_float32_matmul_precision('high')
 
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            print(f"[INFO] Loading MedSAM2 video predictor on {device}")
+            print(f"[INFO] Loading SAM2 video predictor on {device}")
 
             # Check if model file exists
-            if not os.path.exists(self.sam2_model_l_path):
-                print(f"[ERROR] MedSAM2 model file not found at: {self.sam2_model_l_path}")
+            if not os.path.exists(self.sam2p1_model_path):
+                print(f"[ERROR] AM2 model file not found at: {self.sam2p1_model_path}")
                 print("[INFO] Please ensure the MedSAM2 model is downloaded.")
                 self.sam2_predictor = None
                 return
@@ -128,18 +154,18 @@ class SAM2Tracking:
                 GlobalHydra.instance().clear()
 
             # Path to custom config
-            config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
-            config_name = "sam2.1_hiera_l.yaml"
+            # config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
+            # config_name = "sam2.1_hiera_l.yaml"
 
-            print(f"[INFO] Loading SAM2 from checkpoint: {self.sam2_model_l_path}")
-            print(f"[INFO] Using config file: {config_name}")
+            print(f"[INFO] Loading SAM2 from checkpoint: {self.sam2p1_model_path}")
+            print(f"[INFO] Using config file: {self.config_name}")
 
             # Initialize Hydra config context
-            with initialize_config_dir(config_dir=config_path, version_base=None):
+            with initialize_config_dir(config_dir=self.config_path, version_base=None):
                 # Build the predictor (Hydra will now compose internally)
                 self.sam2_predictor = build_sam2_video_predictor(
-                    config_file=config_name,
-                    ckpt_path=self.sam2_model_l_path,
+                    config_file=self.config_name,
+                    ckpt_path=self.sam2p1_model_path,
                     apply_postprocessing=True,
                     vos_optimized=True,
                 )
@@ -179,7 +205,7 @@ class SAM2Tracking:
     #             )
             
     #         # Use the downloaded model checkpoint
-    #         sam2_checkpoint = self.sam2_model_l_path
+    #         sam2_checkpoint = self.sam2p1_model_path
     #         model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
             
     #         self.sam2_predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
