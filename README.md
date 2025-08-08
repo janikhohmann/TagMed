@@ -8,7 +8,7 @@ Medical image annotation, particularly in ultrasound, requires precision, effici
 
 - Provide a simple and intuitive interface for annotating medical data with bounding boxes, polygons and class assignment.
 - Allow creation and classification of bounding boxes on image frames.
-- Support video annotation with frame navigation and object tracking using the automated assistance of [SAM2](https://github.com/facebookresearch/sam2) and [MedSAM2](https://github.com/bowang-lab/MedSAM2/tree/main).
+- Support video annotation with frame navigation and object tracking using the automated assistance of [SAM2](https://github.com/facebookresearch/sam2) and [MedSAM2](https://github.com/bowang-lab/MedSAM2).
 - Designed to handle sensitive medical data locally.
     
 ## Quick Start
@@ -20,8 +20,8 @@ Medical image annotation, particularly in ultrasound, requires precision, effici
 ## File Structure
 
 #### Annotation Table
-When using TagMed an Annotation Table is created for you and your ImageDatabase. 
-
+Bounding box annotations are saved in[x,y,h,w,]-format. Helper functions for converting to the SAM2 format and reading from the annotation table are available.
+When using TagMed, an annotation table is automatically created for you and your ImageDatabase. To ensure everything works correctly, please follow the data structure outlined below.
 
 #### Your Database
 ```
@@ -46,6 +46,11 @@ Videos should be named in the same pattern. If your videos already are framed ad
 {num_patient}_{num_exam}_{num_image}_frame{num_frame}
 Example: 000001_01_00001_frame00001
 ```
+
+#### Medical Reports
+To use this function, a table containing all medical reports is required.
+TagMed searches for the patient and exam identifiers in the annotation table and returns the corresponding columns from the medical reports file.
+For more insights, please take a look at the available example reports.
 
 ## Citation
 If you use TagMed in your research, please cite:
