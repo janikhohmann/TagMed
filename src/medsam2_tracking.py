@@ -35,7 +35,7 @@ class MedSAM2Tracking:
         # set a fallback model
         self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
         self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_latest.pt")
-        
+        self.config_name = "sam2.1_hiera_t512"
 
         self.medsam2_predictor = None
         self.inference_state = None  # For video tracking state
@@ -44,6 +44,7 @@ class MedSAM2Tracking:
         if self.gui.tracking_type.get() == "MedSAM2":
             self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
             self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_latest.pt")
+            print("launching MedSAM2")
             self.config_name = "sam2.1_hiera_t512"
 
         if self.gui.tracking_type.get() == "MedSAM2 US Heart":
@@ -54,6 +55,7 @@ class MedSAM2Tracking:
         if self.gui.tracking_type.get() == "MedSAM2 MRI Liver Lesion":
             self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_MRI_LiverLesion.pt"
             self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_MRI_LiverLesion.pt")
+            self.config_name = "sam2.1_hiera_t512"
 
         if os.path.exists(self.medsam2_model_path):
             return True
