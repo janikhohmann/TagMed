@@ -1,3 +1,4 @@
+<img src="resources/images/TagMed_logo.png"> 
 # TagMed
 
 ## Overview
@@ -16,11 +17,12 @@ Medical image annotation, particularly in ultrasound, requires precision, effici
 ### 1. Installation
 
 ### 2. Usage
+INSERT SCREENSHOTS HERE
 
 ## File Structure
 
 #### Annotation Table
-Bounding box annotations are saved in[x,y,h,w,]-format. Helper functions for converting to the SAM2 format and reading from the annotation table are available.
+Bounding box annotations are saved in [x,y,h,w,]-format. Helper functions for converting to the SAM2 format and reading from the annotation table are available.
 When using TagMed, an annotation table is automatically created for you and your ImageDatabase. To ensure everything works correctly, please follow the data structure outlined below.
 
 #### Your Database
