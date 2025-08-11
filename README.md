@@ -5,9 +5,9 @@
 <div align="center">
  <table align="center">
    <tr>
-     <td><a href="https://arxiv.org/abs/2504.03600" target="_blank"><img src="https://img.shields.io/badge/arXiv-Paper-FF6B6B?style=for-the-badge&logo=arxiv&logoColor=white" alt="Paper"></a></td>
+     <td><a href="https://arxiv.org" target="_blank"><img src="https://img.shields.io/badge/arXiv-Paper-FF6B6B?style=for-the-badge&logo=arxiv&logoColor=white" alt="Paper"></a></td>
      <td><a href="https://www.uniklinik-duesseldorf.de/patienten-besucher/klinikeninstitutezentren/klinik-fuer-gastroenterologie-hepatologie-und-infektiologie/forschung-und-lehre/arbeitsgruppen/ag-luedde" target="_blank"><img           src="https://img.shields.io/badge/UKD-AG Lüdde-f7ac00?style=for-the-badge&logoColor=white" alt="AG Lüdde"></a></td>
-     <td><a href="https://github.com/janikhohmann" target="_blank"><img src="https://img.shields.io/badge/GitHub-Code-181717?style=for-the-badge&logo=github&logoColor=white" alt="Code"></a></td>
+     <td><a href="https://github.com/janikhohmann/TagMed" target="_blank"><img src="https://img.shields.io/badge/GitHub-Code-181717?style=for-the-badge&logo=github&logoColor=white" alt="Code"></a></td>
    </tr>
  </table>
 </div>
@@ -28,8 +28,39 @@ Medical image annotation, particularly in ultrasound, requires precision, effici
 
 ### 1. Installation
 
+**Clone the repository:**
+```bash
+git clone https://github.com/janikhohmann/TagMed.git
+cd TagMed
+```
+
+**Install all requirements:**
+```bash
+python setup_TagMed.py
+```
+
+**Activate the environment:**
+```bash
+source tagmed-env/bin/activate
+```
+
 ### 2. Usage
-INSERT SCREENSHOTS HERE
+
+**Start TagMed:**
+```bash
+cd src
+python main.py
+```
+
+**Basic workflow:**
+1. Load your medical image database
+2. Select patient and examination
+3. Choose annotation type (bounding box or polygon)
+4. Annotate your images/videos
+5. Use SAM2/MedSAM2 tracking for automated propagation across video frames
+6. Export annotations for your computer vision projects
+
+*INSERT SCREENSHOTS HERE*
 
 ## File Structure
 
@@ -110,7 +141,7 @@ EfficientTAM
 
 For questions, issues, or contributions:
 - Create an issue on GitHub
-- Email: [Janik.Hohmann@med.uni-duesseldorf.de]
+- Email: Janik.Hohmann@med.uni-duesseldorf.de
 
 ## License
 Please use this tool under **License [TO BE DONE]** with citing our paper.<br>

@@ -3,7 +3,6 @@ import numpy as np
 import cv2
 import requests
 import ast
-import tqdm
 import torch
 import pandas as pd
 from hydra import compose, initialize_config_dir
@@ -26,15 +25,7 @@ class SAM2Tracking:
         self.selected_anno_table_file = config.get("selected_anno_table_file")
         self.selected_medical_report_file = config.get("selected_medical_report_file")
         self.class_list = config.get("class_list")
-        self.image_size = config.get("image_size", (600, 600))  # Default image size if not set
-
-
-        # Define the URLs for SAM 2.1 checkpoints
-        
-
-        # self.sam2p1_hiera_s_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_small.pt"
-        # self.sam2p1_hiera_b_plus_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_base_plus.pt"
-        
+        self.image_size = config.get("image_size", (600, 600))  # Default image size if not set        
 
         model_dir="../models"  # Verzeichnis, in dem das Modell gespeichert wird
         self.abs_model_dir = os.path.abspath(model_dir)
@@ -59,6 +50,10 @@ class SAM2Tracking:
             self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_tiny.pt")
             self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_tiny.pt"
             self.config_name = "sam2.1_hiera_t.yaml"
+
+        # Other SAM 2.1 checkpoints can be defined here
+        # self.sam2p1_hiera_s_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_small.pt"
+        # self.sam2p1_hiera_b_plus_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_base_plus.pt"
 
         if os.path.exists(self.sam2p1_model_path):
             return True
@@ -85,16 +80,6 @@ class SAM2Tracking:
                 print(f"Downloading SAM2 model from {self.sam2p1_url}...")
 
                 total_size = int(response.headers.get('content-length', 0))
-                # with open(self.sam2p1_model_path, 'wb') as file, tqdm(
-                #     desc="SAM2 Download",
-                #     total=total_size,
-                #     unit='B',
-                #     unit_scale=True,
-                #     unit_divisor=1024
-                # ) as bar:
-                #     for data in response.iter_content(chunk_size=1024):
-                #         file.write(data)
-                #         bar.update(len(data))
                 import tqdm
                 with open(self.sam2p1_model_path, 'wb') as file, tqdm.tqdm(
                     desc="SAM2 Download",
@@ -145,7 +130,7 @@ class SAM2Tracking:
             # Check if model file exists
             if not os.path.exists(self.sam2p1_model_path):
                 print(f"[ERROR] AM2 model file not found at: {self.sam2p1_model_path}")
-                print("[INFO] Please ensure the MedSAM2 model is downloaded.")
+                print("[INFO] Please ensure the SAM2 model is downloaded.")
                 self.sam2_predictor = None
                 return
 
@@ -153,9 +138,6 @@ class SAM2Tracking:
             if GlobalHydra.instance().is_initialized():
                 GlobalHydra.instance().clear()
 
-            # Path to custom config
-            # config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
-            # config_name = "sam2.1_hiera_l.yaml"
 
             print(f"[INFO] Loading SAM2 from checkpoint: {self.sam2p1_model_path}")
             print(f"[INFO] Using config file: {self.config_name}")
@@ -258,7 +240,7 @@ class SAM2Tracking:
             
             resize_h, resize_w = self.image_size
 
-            print(f"[INFO] Initializing MedSAM2 video predictor for temp video path: {temp_video_dir}")
+            print(f"[INFO] Initializing SAM2 video predictor for temp video path: {temp_video_dir}")
             print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
             print(f"[DEBUG] Number of frames: {len(current_frames)}")
             print(f"[DEBUG] Current frame index: {current_frame_index}")
