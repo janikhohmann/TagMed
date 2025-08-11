@@ -1023,6 +1023,9 @@ class VideoAnnotationHandler():
         """
         Gets all frames for the current selected video.
         Returns list with frames.
+        
+        DEPRECATED: Diese Methode wird durch VideoFrameExtractor.get_video_frames_intelligent() ersetzt.
+        Wird nur noch für Kompatibilität beibehalten.
         """
 
         video_id = self.gui.selected_video_index.split(".")[0]
@@ -1036,6 +1039,7 @@ class VideoAnnotationHandler():
     def display_current_frame(self):
         """
         Shows the current frame of the selected video.
+        Verwendet VideoFrameExtractor für intelligente Frame-Pfad-Auflösung.
         """
         
         #self.clear_all_annotations()
@@ -1043,15 +1047,25 @@ class VideoAnnotationHandler():
             self.gui.frame_canvas.delete(rect_id)
         self.drawn_rect_ids.clear()
 
-
         self.mask_handler.clear_all_masks()
 
-        
-        if not hasattr(self, 'current_frames') or not self.current_frames:
+        if not hasattr(self.gui, 'current_frames') or not self.gui.current_frames:
+            print("[WARNING] Keine Frames verfügbar für Anzeige")
             return
 
-        frame_path = os.path.join(self.image_folder, self.current_frames[self.gui.current_frame_index])
+        current_frame_name = self.gui.current_frames[self.gui.current_frame_index]
+        
+        # Verwende VideoFrameExtractor für intelligente Pfad-Auflösung
+        frame_path = self.gui.video_frame_extractor.get_frame_path(
+            patient_id=self.gui.patient_id,
+            selected_exam=self.gui.selected_exam,
+            selected_video=self.gui.selected_video_index,
+            frame_filename=current_frame_name,
+            image_folder=self.image_folder
+        )
+        
         self.frame_path = frame_path
+        print(f"[DEBUG] Lade Frame: {frame_path}")
         
         try:
             pil_frame = Image.open(frame_path)
@@ -1073,10 +1087,10 @@ class VideoAnnotationHandler():
             self.gui.toggle_mask_visibility()
             
             # Update frame label
-            self.gui.frame_index_label.config(text=f"Frame {self.gui.current_frame_index + 1} / {len(self.current_frames)}")
-            self.gui.video_slider.config(to=len(self.current_frames)-1)
+            self.gui.frame_index_label.config(text=f"Frame {self.gui.current_frame_index + 1} / {len(self.gui.current_frames)}")
+            self.gui.video_slider.config(to=len(self.gui.current_frames)-1)
         except Exception as e:
-            print(f"Error loading frame: {e}")
+            print(f"[ERROR] Fehler beim Laden des Frames '{frame_path}': {e}")
 
     def redraw_polygon(self):
         # Entferne alle alten Polygon-Linien

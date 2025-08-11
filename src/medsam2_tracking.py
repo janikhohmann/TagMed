@@ -196,9 +196,9 @@ class MedSAM2Tracking:
             
         predictor = self.medsam2_predictor
 
-        # Initialize video sequence - create a temporary directory with frames
-        video_path = os.path.join(self.selected_image_folder, self.gui.patient_id, self.gui.selected_exam)
-        temp_video_dir = self._create_temp_video_directory(video_path, current_frames)
+        # Initialize video sequence - use VideoFrameExtractor for correct frame paths
+        video_folder = os.path.join(self.selected_image_folder, self.gui.patient_id, self.gui.selected_exam)
+        temp_video_dir = self._create_temp_video_directory_with_extractor(video_folder, current_frames)
         
         try:
             # Reset any previous state and initialize for this video sequence
@@ -249,7 +249,7 @@ class MedSAM2Tracking:
                     points_array = np.array(polygon).reshape(-1, 2)
                     
                     # Scale polygon coordinates from GUI size to original frame size
-                    original_frame_path = os.path.join(video_path, current_frames[current_frame_index])
+                    original_frame_path = self._get_frame_path(video_folder, current_frames[current_frame_index])
                     if os.path.exists(original_frame_path):
                         original_frame = cv2.imread(original_frame_path)
                         original_height, original_width = original_frame.shape[:2]
@@ -316,7 +316,7 @@ class MedSAM2Tracking:
                     selected_class = class_list[selected_annotation_index]
 
                     # Scale coordinates from GUI size to original frame size
-                    original_frame_path = os.path.join(video_path, current_frames[current_frame_index])
+                    original_frame_path = self._get_frame_path(video_folder, current_frames[current_frame_index])
                     if os.path.exists(original_frame_path):
                         original_frame = cv2.imread(original_frame_path)
                         original_height, original_width = original_frame.shape[:2]
@@ -424,7 +424,7 @@ class MedSAM2Tracking:
                                 
                                 # Scale polygon coordinates back to GUI size
                                 if generated_polygon:
-                                    original_frame_path = os.path.join(video_path, current_frames[frame_idx])
+                                    original_frame_path = self._get_frame_path(video_folder, current_frames[frame_idx])
                                     if os.path.exists(original_frame_path):
                                         original_frame = cv2.imread(original_frame_path)
                                         original_height, original_width = original_frame.shape[:2]
@@ -469,7 +469,7 @@ class MedSAM2Tracking:
                                     x1, y1 = xs.max(), ys.max()
                                     
                                     # Scale coordinates back to GUI size
-                                    original_frame_path = os.path.join(video_path, current_frames[frame_idx])
+                                    original_frame_path = self._get_frame_path(video_folder, current_frames[frame_idx])
                                     if os.path.exists(original_frame_path):
                                         original_frame = cv2.imread(original_frame_path)
                                         original_height, original_width = original_frame.shape[:2]
@@ -517,11 +517,34 @@ class MedSAM2Tracking:
         finally:
             # Always cleanup temporary directory
             self._cleanup_temp_directory(temp_video_dir)
-    
-    def _create_temp_video_directory(self, video_path, current_frames):
+
+    def _get_frame_path(self, video_folder, frame_filename):
         """
-        Creates a temporary directory with symlinks to video frames in the format expected by MedSAM2.
-        MedSAM2 uses the same frame naming convention as SAM2 (00000.jpg, 00001.jpg, etc.)
+        Verwendet VideoFrameExtractor um den korrekten Pfad zu einem Frame zu bekommen.
+        
+        Args:
+            video_folder (str): Basis-Ordner für Videos/Frames
+            frame_filename (str): Name der Frame-Datei
+            
+        Returns:
+            str: Vollständiger Pfad zum Frame
+        """
+        if hasattr(self.gui, 'video_frame_extractor'):
+            return self.gui.video_frame_extractor.get_frame_path(
+                patient_id=self.gui.patient_id,
+                selected_exam=self.gui.selected_exam,
+                selected_video=self.gui.selected_video_index,
+                frame_filename=frame_filename,
+                image_folder=video_folder
+            )
+        else:
+            # Fallback auf alte Methode
+            return os.path.join(video_folder, frame_filename)
+
+    def _create_temp_video_directory_with_extractor(self, video_folder, current_frames):
+        """
+        Erstellt ein temporäres Verzeichnis mit Symlinks zu Video-Frames unter Verwendung des VideoFrameExtractors.
+        MedSAM2 erwartet Frames mit Namen wie 00000.jpg, 00001.jpg, etc.
         """
         import tempfile
         import shutil
@@ -533,7 +556,9 @@ class MedSAM2Tracking:
         try:
             # Create symlinks for each frame with the expected naming format
             for i, frame_name in enumerate(current_frames):
-                source_path = os.path.join(video_path, frame_name)
+                # Verwende VideoFrameExtractor für korrekten Pfad
+                source_path = self._get_frame_path(video_folder, frame_name)
+                
                 # MedSAM2 expects frame names like 00000.jpg, 00001.jpg, etc.
                 target_name = f"{i:05d}.jpg"
                 target_path = os.path.join(temp_dir, target_name)

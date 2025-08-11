@@ -13,6 +13,7 @@ from video_annotation_handler import VideoAnnotationHandler
 from video_tracking import VideoTracking
 from mask_handler import MaskHandler
 from sam2_tracking import SAM2Tracking
+from video_frame_extractor import VideoFrameExtractor
 
 class GalleryNavigator:
     def __init__(self, root):
@@ -32,6 +33,9 @@ class GalleryNavigator:
         self.medical_record_loader = MedicalRecordLoader()
         self.img_annotation_handler = ImgAnnotationHandler(self)
         self.video_annotation_handler = VideoAnnotationHandler(self)
+
+        # Video Frame Extractor für intelligente Frame-Bereitstellung
+        self.video_frame_extractor = VideoFrameExtractor()
 
         self.video_mode = False  # Flag to indicate if video mode is active
         self.modify_mode = tk.BooleanVar(value=False)  # Flag to indicate if modify mode is active
@@ -337,7 +341,7 @@ class GalleryNavigator:
     def on_video_selected(self, event):
         """
         Function to select one video from the listbox.
-        Searches for frames of respective video and shows the first one.
+        Intelligente Frame-Bereitstellung: Verwendet vorhandene Frames oder extrahiert aus Video.
         """
 
         self.video_mode = True
@@ -361,7 +365,22 @@ class GalleryNavigator:
             print("Warning: self.header_label does not exist.")
 
         self.selected_video_index = selected_video
-        current_frames = self.video_annotation_handler.get_all_video_frames(self.patient_id, self.selected_exam)
+        
+        # Intelligente Frame-Bereitstellung mit VideoFrameExtractor
+        image_folder = os.path.join(
+            self.selected_image_folder,
+            self.patient_id,
+            self.selected_exam
+        )
+        
+        # Hole Frames intelligent: entweder vorhanden oder aus Video extrahiert
+        current_frames = self.video_frame_extractor.get_video_frames_intelligent(
+            patient_id=self.patient_id,
+            selected_exam=self.selected_exam,
+            selected_video=selected_video,
+            image_folder=image_folder
+        )
+        
         self.current_frames = current_frames
         self.current_frame_index = 0
         self.current_frame_id = current_frames[self.current_frame_index].split(".")[0].strip() if current_frames else None
@@ -383,10 +402,14 @@ class GalleryNavigator:
 
         if answer is True:
             def on_saved():
+                # Cleanup temporärer Video-Frames beim Patienten-Wechsel
+                self.video_frame_extractor.cleanup_on_patient_switch()
                 self.patient_window.destroy()
             
             self.save_annotation_gui(on_complete=on_saved)
         elif answer is False:
+            # Cleanup temporärer Video-Frames beim Patienten-Wechsel
+            self.video_frame_extractor.cleanup_on_patient_switch()
             self.patient_window.destroy()
 
 
