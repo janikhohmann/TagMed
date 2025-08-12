@@ -1,3 +1,23 @@
+"""
+Gallery Navigator - Patient Data Visualization and Annotation Interface
+
+This module provides the main interface for viewing and annotating medical images
+and videos within the TagMed application. It creates detailed patient windows
+with tabbed interfaces for images and videos, annotation tools, and tracking capabilities.
+
+Features:
+- Dual-tab interface for images and videos
+- Comprehensive annotation tools (bounding boxes, polygons)
+- Video frame extraction and intelligent frame handling
+- SAM2/MedSAM2 tracking integration
+- Mask visualization and management
+- Medical report integration
+- Progress saving and session management
+
+Author: Janik Hohmann
+Institution: University Hospital Düsseldorf
+"""
+
 import tkinter as tk
 from tkinter import  ttk, messagebox
 import os 
@@ -16,9 +36,39 @@ from sam2_tracking import SAM2Tracking
 from video_frame_extractor import VideoFrameExtractor
 
 class GalleryNavigator:
+    """
+    Main interface for patient data visualization and medical annotation.
+    
+    This class creates and manages detailed patient windows with comprehensive
+    annotation capabilities for both images and videos. It integrates multiple
+    annotation handlers, tracking systems, and visualization tools to provide
+    a complete medical annotation workflow.
+    
+    Attributes:
+        root (tk.Tk): Main application window
+        patient_window (tk.Toplevel): Patient-specific annotation window
+        annotation_loader (AnnotationLoader): Handles annotation data persistence
+        video_frame_extractor (VideoFrameExtractor): Manages video frame extraction
+        img_annotation_handler (ImgAnnotationHandler): Handles image annotations
+        video_annotation_handler (VideoAnnotationHandler): Handles video annotations
+        video_tracking (VideoTracking): Provides tracking functionality
+        sam2_tracking (SAM2Tracking): Advanced SAM2/MedSAM2 tracking
+        mask_handler (MaskHandler): Manages annotation masks
+    """
+    
     def __init__(self, root):
+        """
+        Initialize the Gallery Navigator with all required components.
+        
+        Sets up configuration, annotation handlers, tracking systems,
+        and prepares the interface for patient data visualization.
+        
+        Args:
+            root (tk.Tk): Main application window reference
+        """
         self.root = root
 
+        # Load configuration settings
         config = ConfigHandler()
         self.selected_image_folder = config.get("selected_image_folder")
         self.selected_anno_table_file = config.get("selected_anno_table_file")
@@ -26,6 +76,7 @@ class GalleryNavigator:
         self.class_list = config.get("class_list")
         self.image_size = config.get("image_size", (600, 600))  # Default image size if not set
 
+        # Initialize data management components
         self.annotation_loader = AnnotationLoader()
         self.all_annotations = self.annotation_loader.load_annotations_in_internal_list() # Load all annotations into an internal list
 
@@ -34,16 +85,18 @@ class GalleryNavigator:
         self.img_annotation_handler = ImgAnnotationHandler(self)
         self.video_annotation_handler = VideoAnnotationHandler(self)
 
-        # Video Frame Extractor für intelligente Frame-Bereitstellung
+        # Video Frame Extractor for intelligent frame handling
         self.video_frame_extractor = VideoFrameExtractor()
 
+        # Interface state flags
         self.video_mode = False  # Flag to indicate if video mode is active
         self.modify_mode = tk.BooleanVar(value=False)  # Flag to indicate if modify mode is active
         self.bounding_box_mode = False  # Flag to indicate if bounding box mode is active
         self.masks_visible = tk.BooleanVar(value=False)  # Flag to indicate if masks are visible
         self.click_mode = False  # Flag to indicate if click mode is active
-        self.good_2_go_mode = False  # Flag to indicate if good-to-go mode is active
+        self.good_2_go_mode = False  # Flag to indicate if good-to-go mode is active --> not implemented yet
 
+        # Initialize tracking and mask handling systems
         self.video_tracking = VideoTracking(self)
         self.sam2_tracking = SAM2Tracking(self)
 
@@ -60,8 +113,14 @@ class GalleryNavigator:
 
     def open_patient_window(self, patient_id):
         """
-        Opens new window with Details and Gallery for a patient.
-        Gets executetd by double clining on a patient - on_double_click().
+        Opens a new window with detailed patient data and annotation interface.
+        
+        Creates a comprehensive patient window with tabbed interface for images
+        and videos, medical report display, and annotation tools. This is the
+        main interface for annotating medical data for a specific patient.
+        
+        Args:
+            patient_id (str): Unique identifier for the patient
         """ 
 
         # Creating a new window
@@ -76,8 +135,8 @@ class GalleryNavigator:
         self.patient_window.bind("<Control-z>", lambda event: self.delete_last_polygon_point_manager())
 
 
+        # get exams for the patient
         exams = self.annotation_loader.get_exams(patient_id)
-        patient_annotations = self.annotation_loader.filter_annotations_for_patient(self.all_annotations, patient_id) # filter annotations for the patient from internal list
 
         top_frame = tk.Frame(patient_window)
         top_frame.pack(side="top", fill="x", padx=10, pady=10)
@@ -108,7 +167,7 @@ class GalleryNavigator:
         image_tab = tk.Frame(notebook)
         notebook.add(image_tab, text="Images")
 
-        #Configure rows: Row 0 expands, Row 1 is fixed height of 40px
+        #Configure rows: Row 0 expands, Row 1 with fixed height 
         image_tab.grid_rowconfigure(0, weight=1)  # Row 0 should expand to fill available space
         image_tab.grid_rowconfigure(1, weight=0, minsize=200)  # Row 1 is 200 high
 
@@ -120,7 +179,7 @@ class GalleryNavigator:
         image_tab.grid_columnconfigure(2, weight=0, minsize=620)  # Fixed width for the right column
 
         # Create top row frames (4 frames in one row)
-        image_list_frame = tk.Frame(image_tab, bg="blue")
+        image_list_frame = tk.Frame(image_tab)
         image_list_frame.grid(row=0, column=0, padx=2, sticky="nsew")
 
         # Create Scrollbar fpr the Listbox
@@ -137,7 +196,7 @@ class GalleryNavigator:
         self.image_listbox.bind('<<ListboxSelect>>', self.on_image_selected)
 
         # Create the description_frame first
-        description_frame = tk.Frame(image_tab, bg="black")
+        description_frame = tk.Frame(image_tab)
         description_frame.grid(row=0, column=1, padx=2, sticky="nsew")
 
         # Create Scrollbar for the description box
@@ -159,6 +218,7 @@ class GalleryNavigator:
         image_frame.grid_rowconfigure(1, weight=1)
         image_frame.grid_columnconfigure(0, weight=1)
 
+        # load the selected image name for header text
         try:
             header_text = self.selected_image_index.split(".")[0]
         except AttributeError:
@@ -187,7 +247,7 @@ class GalleryNavigator:
         video_tab = tk.Frame(notebook)
         notebook.add(video_tab, text="Videos")
 
-                #Configure rows: Row 0 expands, Row 1 is fixed height of 40px
+        # Configure rows: Row 0 expands, Row 1 is fixed height of 40px
         video_tab.grid_rowconfigure(0, weight=1)  # Row 0 should expand to fill available space
         video_tab.grid_rowconfigure(1, weight=0, minsize=200)  # Row 1 is 200 high
 
@@ -199,7 +259,7 @@ class GalleryNavigator:
         video_tab.grid_columnconfigure(2, weight=0, minsize=620)  # Fixed width for the right column
 
         # Create top row frames (4 frames in one row)
-        video_list_frame = tk.Frame(video_tab, bg="blue")
+        video_list_frame = tk.Frame(video_tab)
         video_list_frame.grid(row=0, column=0, padx=2, sticky="nsew")
 
         # Create Scrollbar fpr the Listbox
@@ -216,7 +276,7 @@ class GalleryNavigator:
         self.video_listbox.bind('<<ListboxSelect>>', self.on_video_selected)
 
         # Create the description_frame first
-        description_frame = tk.Frame(video_tab, bg="black")
+        description_frame = tk.Frame(video_tab)
         description_frame.grid(row=0, column=1, padx=2, sticky="nsew")
 
         # Create Scrollbar for the description box
@@ -238,7 +298,7 @@ class GalleryNavigator:
         frame_frame.grid_rowconfigure(1, weight=1)
         frame_frame.grid_columnconfigure(0, weight=1)
 
-        #print("Video selected: ",self.selected_video_index)
+        # load the selected video name for header text
         try:
             header_text = self.selected_video_index.split(".")[0]
         except AttributeError:
@@ -261,6 +321,18 @@ class GalleryNavigator:
 
 
     def on_exam_selected(self, event, exam_var, patient_id):
+        """
+        Handles selection of a medical examination from the dropdown.
+        
+        Updates both image and video listboxes with files from the selected exam,
+        loads corresponding medical reports, and refreshes annotation colors
+        to show current annotation status.
+        
+        Args:
+            event: Tkinter event object (ComboboxSelected)
+            exam_var (tk.StringVar): Variable containing selected exam name
+            patient_id (str): Patient identifier for data loading
+        """
         selected_exam = exam_var.get()
         self.selected_exam = selected_exam
         images = self.data_loader.load_images_in_dir(patient_id, selected_exam)
@@ -274,8 +346,6 @@ class GalleryNavigator:
         for video in videos:
             self.video_listbox.insert(tk.END, video)
 
-        #self.create_internal_mask_list(patient_id, selected_exam)
-
         # clean up the textboxes before filling them and then filling them with new medical reports
         self.des_textbox_img.delete("1.0", tk.END)
         self.des_textbox_video.delete("1.0", tk.END)
@@ -288,7 +358,14 @@ class GalleryNavigator:
 
     def on_image_selected(self, event):
         """
-        Function to display the selected image on canvas and update the header.
+        Handles selection and display of a medical image.
+        
+        Loads the selected image, resizes it for display, updates the header,
+        and loads any existing annotations. Also refreshes the annotation
+        listbox colors and mask visibility based on current settings.
+        
+        Args:
+            event: Tkinter listbox selection event
         """
 
         self.video_mode = False
@@ -340,8 +417,19 @@ class GalleryNavigator:
 
     def on_video_selected(self, event):
         """
-        Function to select one video from the listbox.
-        Intelligente Frame-Bereitstellung: Verwendet vorhandene Frames oder extrahiert aus Video.
+        Handles selection of a video for annotation.
+        
+        Intelligently provides video frames by either using existing frames
+        or extracting them from the video file. Sets up the video annotation
+        interface with frame navigation and displays the first frame.
+        
+        Uses the VideoFrameExtractor for intelligent frame handling:
+        - Checks for existing extracted frames first
+        - Extracts frames from video if none exist
+        - Sets up frame navigation and current frame tracking
+        
+        Args:
+            event: Tkinter listbox selection event
         """
 
         self.video_mode = True
@@ -366,14 +454,13 @@ class GalleryNavigator:
 
         self.selected_video_index = selected_video
         
-        # Intelligente Frame-Bereitstellung mit VideoFrameExtractor
         image_folder = os.path.join(
             self.selected_image_folder,
             self.patient_id,
             self.selected_exam
         )
-        
-        # Hole Frames intelligent: entweder vorhanden oder aus Video extrahiert
+
+        # get frames: either existing or extracted from video
         current_frames = self.video_frame_extractor.get_video_frames_intelligent(
             patient_id=self.patient_id,
             selected_exam=self.selected_exam,
@@ -389,9 +476,15 @@ class GalleryNavigator:
 
     def saving_progress_question(self):
         """
-        Opens Popup window when you want to close the patient window.
-        Asks if you want to save your progress, saves, and closes window afterwards. 
-        Pops up everytime you want to close the patient window. Does not check for changes. 
+        Shows save dialog when closing the patient window.
+        
+        Presents a dialog asking whether to save annotations before closing.
+        Handles three responses:
+        - Yes: Saves annotations then closes window
+        - No: Closes window without saving
+        - Cancel: Keeps window open
+        
+        Also performs cleanup of temporary video frames when closing.
         """
 
         answer = messagebox.askyesnocancel(
@@ -402,13 +495,13 @@ class GalleryNavigator:
 
         if answer is True:
             def on_saved():
-                # Cleanup temporärer Video-Frames beim Patienten-Wechsel
+                # Cleanup temporary video frames on patient switch with saving
                 self.video_frame_extractor.cleanup_on_patient_switch()
                 self.patient_window.destroy()
             
             self.save_annotation_gui(on_complete=on_saved)
         elif answer is False:
-            # Cleanup temporärer Video-Frames beim Patienten-Wechsel
+            # Cleanup temporary video frames on patient switch withut saving
             self.video_frame_extractor.cleanup_on_patient_switch()
             self.patient_window.destroy()
 
@@ -416,31 +509,44 @@ class GalleryNavigator:
 
     def setup_img_bottom_frame(self, parent):
         """
-        Setup for bottom frame - sets grid configuration, calls img_annotation_handler
+        Sets up the bottom control panel for image annotation.
+        
+        Creates a comprehensive control interface including:
+        - Annotation type dropdown (Bounding Box, Polygon)
+        - Class selection dropdown
+        - Action buttons (Add, Delete, Save)
+        - Modify mode toggle
+        - Annotation objects listbox
+        - Mask visibility controls
+        
+        Also binds mouse events to the image canvas for interactive annotation.
+        
+        Args:
+            parent: Parent tkinter widget to contain the bottom frame
         """
-        bottom_frame = tk.Frame(parent, height=200, relief=tk.SUNKEN, borderwidth=1) # Etwas Relief zum Debuggen
+        bottom_frame = tk.Frame(parent, height=200, relief=tk.SUNKEN, borderwidth=1)
         bottom_frame.grid(row=1, column=0, columnspan=4, padx=2, pady=2, sticky="nsew")
 
-        # Grid-Konfiguration für bottom_frame:
-        # Spalte 0 (Dropdowns) und 1 (Buttons) haben feste Breite (weight=0)
-        # Spalte 2 (Listbox) dehnt sich aus (weight=1)
+        # Grid configuration for bottom_frame:
+        # Column 0 (Dropdowns) and 1 (Buttons) have fixed width (weight=0)
+        # Column 2 (Listbox) expands (weight=1)
         bottom_frame.grid_columnconfigure(0, weight=0)
         bottom_frame.grid_columnconfigure(1, weight=0)
         bottom_frame.grid_columnconfigure(2, weight=0)
         bottom_frame.grid_columnconfigure(3, weight=0)  # Slider
-        bottom_frame.grid_rowconfigure(1, weight=1) # Erlaubt der Listbox, sich vertikal auszudehnen
+        bottom_frame.grid_rowconfigure(1, weight=1) # Allows the listbox to expand vertically
 
-        # --- Header über den Steuerelementen ---
+        # --- Header over Controls ---
         header = tk.Label(bottom_frame, text="Annotation Properties", font=("Arial", 12, "bold"))
         header.grid(row=0, column=0, columnspan=4, sticky="w", padx=5, pady=(10, 5))
 
-        # --- Spalte 0: Dropdowns ---
+        # --- Column 0: Dropdowns ---
         dropdown_frame = tk.Frame(bottom_frame)
         dropdown_frame.grid(row=1, column=0, sticky="nw", padx=5, pady=5)
 
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.img_annotation_type = tk.StringVar()
-        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_annotation_type, values=["Bounding Box", "Polygon", "Magic Wand"], width=15)
+        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_annotation_type, values=["Bounding Box", "Polygon"], width=15)
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
@@ -448,12 +554,12 @@ class GalleryNavigator:
         self.img_selected_class = tk.StringVar()
         class_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_selected_class, values=self.class_list, width=15)
         class_dropdown.pack(anchor="w", padx=5)
-        if self.class_list: # Setze Default nur, wenn Liste nicht leer
+        if self.class_list: # Set default only if list is not empty
             class_dropdown.current(0)
 
-        # --- Spalte 1: Buttons und Toggle ---
+        # --- Column 1: Buttons and Toggle ---
         controls_frame = tk.Frame(bottom_frame)
-        controls_frame.grid(row=1, column=1, sticky="n", padx=5, pady=5) # sticky="n" für Top-Alignment
+        controls_frame.grid(row=1, column=1, sticky="n", padx=5, pady=5) # sticky="n" for top alignment
 
         add_button = tk.Button(controls_frame, text="Add", width=12, command=self.img_annotation_handler.add_annotation)
         add_button.pack(pady=2, fill=tk.X)
@@ -468,9 +574,9 @@ class GalleryNavigator:
 
         # Modify Mode Toggle (Checkbutton)
         modify_toggle = ttk.Checkbutton(controls_frame, text="Modify Mode", variable=self.modify_mode, command=self.img_annotation_handler.modify_annotation)
-        modify_toggle.pack(pady=(10, 2), anchor="w") # Etwas Abstand nach oben, linksbündig
+        modify_toggle.pack(pady=(10, 2), anchor="w") # Slightly more space above, left-aligned
 
-        # --- Spalte 2: Listbox für Objects ---
+        # --- Column 2: Listbox for Objects ---
         listbox_area_frame = tk.Frame(bottom_frame)
         listbox_area_frame.grid(row=1, column=2, sticky="nsew", padx=(5, 10), pady=5)
         listbox_area_frame.grid_columnconfigure(0, weight=1)
@@ -483,20 +589,20 @@ class GalleryNavigator:
 
         self.img_annotation_listbox.bind("<<ListboxSelect>>", lambda event: self.img_annotation_handler.on_annotation_selected(event))
 
-        if self.image_canvas: # Nur binden, wenn Canvas existiert
+        if self.image_canvas: # Only bind if canvas exists
             self.image_canvas.bind("<ButtonPress-1>", self.img_annotation_handler.on_press)
             self.image_canvas.bind("<B1-Motion>", self.img_annotation_handler.on_drag)
             self.image_canvas.bind("<ButtonRelease-1>", self.img_annotation_handler.on_release)
         else:
             print("Warning: self.image_canvas is not initialized. Bindings not set.")
 
-        # # Slider + zusätzliche Steuerungen (Spalte 3) - stays empty for images
+        # # Slider + additional controls (Column 3) - stays empty for images
         slider_frame = tk.Frame(bottom_frame, width=600, height=150)
         slider_frame.grid(row=1, column=4, sticky="nsew", padx=(10, 10), pady=0)
         slider_frame.grid_propagate(False)
 
 
-        # Navigation Buttons unterhalb (links unten)
+        # Navigation Buttons below (left bottom)
         tracker_controls_row = tk.Frame(slider_frame)
         tracker_controls_row.pack(side="bottom", anchor="w", fill="x", pady=(15, 10))
 
@@ -508,7 +614,7 @@ class GalleryNavigator:
         )
         self.create_mask_toggle_button.pack(side="left", padx=5)
 
-        # Masken-Checkbox
+        # Mask Checkbox
         self.mask_toggle_button = ttk.Checkbutton(
             tracker_controls_row,
             text="Show Masks",
@@ -524,7 +630,23 @@ class GalleryNavigator:
 
     def setup_video_bottom_frame(self, parent):
         """
-        Setup for bottom frame - sets grid configuration, calls video_annotation_handler
+        Sets up the bottom control panel for video annotation and tracking.
+        
+        Creates a comprehensive video annotation interface including:
+        - Annotation type dropdown (Bounding Box, Polygon)
+        - Class selection dropdown
+        - Action buttons (Add, Delete, Save)
+        - Modify mode toggle
+        - Annotation objects listbox
+        - Video frame navigation slider with controls
+        - Tracking system dropdown (Simple, SAM2, MedSAM2 variants)
+        - Start tracking button
+        - Mask visibility and creation controls
+        
+        Also binds mouse events to the frame canvas for interactive annotation.
+        
+        Args:
+            parent: Parent tkinter widget to contain the bottom frame
         """
         bottom_frame = tk.Frame(parent, height=200, relief=tk.SUNKEN, borderwidth=1)
         bottom_frame.grid(row=1, column=0, columnspan=4, padx=2, pady=2, sticky="nsew")
@@ -539,14 +661,14 @@ class GalleryNavigator:
         header = tk.Label(bottom_frame, text="Annotation Properties", font=("Arial", 12, "bold"))
         header.grid(row=0, column=0, columnspan=4, sticky="w", padx=5, pady=(10, 5))
 
-        # Dropdowns (Spalte 0)
+        # Dropdowns (Column 0)
         dropdown_frame = tk.Frame(bottom_frame)
         dropdown_frame.grid(row=1, column=0, sticky="nw", padx=5, pady=5)
 
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.video_annotation_type = tk.StringVar()
         type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_annotation_type,
-                                    values=["Bounding Box", "Polygon", "Single-Point Prompt"], width=15)
+                                    values=["Bounding Box", "Polygon"], width=15)
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
@@ -558,7 +680,7 @@ class GalleryNavigator:
         if self.class_list:
             class_dropdown.current(0)
 
-        # Buttons (Spalte 1)
+        # Buttons (Column 1)
         controls_frame = tk.Frame(bottom_frame)
         controls_frame.grid(row=1, column=1, sticky="n", padx=5, pady=5)
 
@@ -581,7 +703,7 @@ class GalleryNavigator:
                                         command=self.video_annotation_handler.modify_annotation)
         modify_toggle.pack(pady=(10, 2), anchor="w")
 
-        # Listbox (Spalte 2)
+        # Listbox (Column 2)
         listbox_area_frame = tk.Frame(bottom_frame)
         listbox_area_frame.grid(row=1, column=2, sticky="nsew", padx=(5, 10), pady=5)
         listbox_area_frame.grid_columnconfigure(0, weight=1)
@@ -600,9 +722,9 @@ class GalleryNavigator:
             self.frame_canvas.bind("<B1-Motion>", self.video_annotation_handler.on_drag)
             self.frame_canvas.bind("<ButtonRelease-1>", self.video_annotation_handler.on_release)
         else:
-            print("Warnung: self.frame_canvas ist nicht initialisiert. Bindings nicht gesetzt.")
+            print("Warning: self.frame_canvas is not initialized. Bindings not set.")
 
-        # Slider + zusätzliche Steuerungen (Spalte 3)
+        # Slider + additional controls (Column 3)
         slider_frame = tk.Frame(bottom_frame, width=600, height=150)
         slider_frame.grid(row=1, column=3, sticky="nsew", padx=(10, 10), pady=0)
         slider_frame.grid_propagate(False)
@@ -619,8 +741,8 @@ class GalleryNavigator:
         )
         self.video_slider.pack(pady=(5, 5))
 
-        
-        # Neue horizontale Leiste unter dem Slider
+
+        # New horizontal buttons below the slider
         button_row = tk.Frame(slider_frame)
         button_row.pack(pady=(0, 0))
 
@@ -632,11 +754,11 @@ class GalleryNavigator:
                                 command=lambda: self.video_slider.set(self.video_slider.get() + 1))
         right_button.pack(side="left", padx=5)
 
-        # Seperator under slider unit
-        separator = tk.Frame(slider_frame, height=1, bg="black")  # Hellgrau
+        # Separator under slider unit
+        separator = tk.Frame(slider_frame, height=1, bg="black")  
         separator.pack(fill="x",  padx=0, pady=4)
 
-        # Navigation Buttons unterhalb
+        # Navigation Buttons below
         tracker_controls_row = tk.Frame(slider_frame)
         tracker_controls_row.pack(pady=(15, 2), fill="x")
 
@@ -652,7 +774,7 @@ class GalleryNavigator:
                                          command=self.video_tracking.tracking_starter)
         start_tracker_button.pack(side="left", padx=5)
 
-        # # Masken-Checkbox
+        # # Mask-Checkbox
         self.mask_toggle_button = ttk.Checkbutton(
             tracker_controls_row,
             text="Show Masks",
@@ -669,8 +791,7 @@ class GalleryNavigator:
         )
         self.create_frame_mask_toggle_button.pack(side="left", padx=5)
 
-
-        # Tracker Prompt Button (Platzhalter)
+        # Tracker Prompt Button (Placeholder)
         # tracker_prompt_button = tk.Button(tracker_controls_row, text="Tracker Prompts", width=16)
         # tracker_prompt_button.pack(side="left", padx=5)
 
@@ -681,7 +802,14 @@ class GalleryNavigator:
 
     def on_slider_changed(self, value):
         """
-        Triggered when slider is moved, updates current frame and image.
+        Handles video frame navigation slider changes.
+        
+        Updates the current frame index and refreshes the display when
+        the user moves the frame navigation slider. Ensures the value
+        is within valid range and updates the video annotation handler.
+        
+        Args:
+            value (float): New slider position (converted to int frame index)
         """
         if not hasattr(self, 'current_frames') or not self.current_frames:
             return
@@ -695,7 +823,14 @@ class GalleryNavigator:
 
     def save_annotation_gui(self, on_complete=None):
         """
-        shows spinner while saving runs in background.
+        Shows progress spinner while saving annotations in background.
+        
+        Creates a modal progress dialog and saves annotations in a separate
+        thread to prevent UI freezing. Automatically closes the dialog when
+        saving is complete and executes optional completion callback.
+        
+        Args:
+            on_complete (callable, optional): Function to call after saving completes
         """
 
         popup = tk.Toplevel()
@@ -728,6 +863,16 @@ class GalleryNavigator:
 
 
     def wrong_annotation_warning_gui(self, status):
+        """
+        Shows warning dialog for conflicting annotation types.
+        
+        Displays appropriate warning message when user tries to mix
+        different annotation types (bounding boxes and polygons) on
+        the same image, which is not allowed in TagMed.
+        
+        Args:
+            status (str): Type of conflict - "Polygon" or "Bounding Box"
+        """
 
         if status == "Polygon":
             info = messagebox.showinfo(
@@ -744,13 +889,26 @@ class GalleryNavigator:
             )
 
     def select_annotation_before_tracking_gui(self):
-            info = messagebox.showinfo(
-                "Tracking Error",
-                "Please select an annotation to be tracked.",
-                parent=self.patient_window
-            )
+        """
+        Shows error dialog when tracking is attempted without annotation selection.
+        
+        Displays an informational message box reminding the user to select
+        an annotation before starting the tracking process.
+        """
+        info = messagebox.showinfo(
+            "Tracking Error",
+            "Please select an annotation to be tracked.",
+            parent=self.patient_window
+        )
 
     def delete_annotations_for_all_frames_question(self):
+        """
+        Shows confirmation dialog for deleting all video annotations.
+        
+        Asks user to confirm deletion of all annotations for the currently
+        selected video. If confirmed, delegates to video tracking system
+        to perform the bulk deletion operation.
+        """
 
         answer = messagebox.askyesno(
             "Deleting all Annotations",
@@ -762,6 +920,15 @@ class GalleryNavigator:
             self.video_tracking.delete_all_annotations_for_one_video()
 
     def ask_for_sam2_download(self):
+        """
+        Shows dialog asking user permission to download SAM2 model.
+        
+        Prompts user when SAM2 model is not available locally and needs
+        to be downloaded for tracking functionality. Returns user's choice.
+        
+        Returns:
+            bool: True if user agrees to download, False otherwise
+        """
         answer = messagebox.askyesno(
             "Downloading SAM2",
             f"The SAM2 model is not yet loaded. Should this model be loaded?",
@@ -771,6 +938,16 @@ class GalleryNavigator:
         return answer
     
     def ask_for_medsam2_download(self):
+        """
+        Shows dialog asking user permission to download MedSAM2 model.
+        
+        Prompts user when MedSAM2 model is not available locally and needs
+        to be downloaded for medical-specific tracking functionality. 
+        Returns user's choice.
+        
+        Returns:
+            bool: True if user agrees to download, False otherwise
+        """
         answer = messagebox.askyesno(
             "Downloading MedSAM2",
             f"The MedSAM2 model is not yet loaded. Should this model be loaded?",
@@ -782,6 +959,13 @@ class GalleryNavigator:
 
 
     def toggle_mask_visibility(self):
+        """
+        Toggles the visibility of annotation masks on images/videos.
+        
+        Determines whether currently viewing image or video tab, then
+        either shows or hides masks based on the current toggle state.
+        Delegates to mask_handler for actual mask loading/clearing operations.
+        """
 
         current_tab = self.notebook.select()
         if str(self.image_canvas).startswith(current_tab):
@@ -792,33 +976,45 @@ class GalleryNavigator:
 
         if self.masks_visible.get():
             if self.showing_video:
-                print("[DEBUG] Masks will be shown.")
+                #print("[DEBUG] Masks will be shown.")
                 self.mask_handler.load_masks_for_frame()
             else:
                 self.mask_handler.load_masks_for_image()
         else:
-            print("[DEBUG] Mask will not be shown.")
+            #print("[DEBUG] Mask will not be shown.")
             self.mask_handler.clear_all_masks()
 
 
 
     def delete_last_polygon_point_manager(self):
         """
-        Deletes the last point of a polygon annotation.
+        Manages deletion of the last polygon point across different tabs.
+        
+        Determines which tab (image or video) is currently active and
+        delegates the polygon point deletion to the appropriate annotation
+        handler. Bound to Ctrl+Z keyboard shortcut.
         """
 
         current_tab = self.notebook.select()
 
         if str(self.image_canvas).startswith(current_tab):
-            print("[DEBUG] Using img_annotation_handler")
+            # print("[DEBUG] Using img_annotation_handler")
             self.img_annotation_handler.delete_last_polygon_point()
         elif str(self.frame_canvas).startswith(current_tab):
-            print("[DEBUG] Using video_annotation_handler")
+            # print("[DEBUG] Using video_annotation_handler")
             self.video_annotation_handler.delete_last_polygon_point()
 
     def wait_for_tracking_gui(self, on_complete=None):
         """
-        shows spinner while tracking runs in background.
+        Shows progress spinner while tracking runs in background.
+        
+        Creates a modal progress dialog with indeterminate progress bar
+        while tracking operations execute in a separate thread. Prevents
+        UI freezing during potentially long-running tracking processes.
+        
+        Args:
+            on_complete (callable, optional): Function to call when tracking completes.
+                                            If None, defaults to SAM2 tracking method.
         """
 
         popup = tk.Toplevel()

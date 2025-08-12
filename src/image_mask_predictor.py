@@ -1,34 +1,59 @@
+"""
+Image Mask Predictor - SAM2 Image Segmentation Integration
+
+This module provides advanced mask prediction capabilities using Meta's SAM2 
+(Segment Anything 2) models for single image segmentation in medical annotation workflows.
+It supports both bounding box and polygon-based prompting for precise mask generation.
+
+Features:
+- SAM2 image predictor integration
+- Bounding box and polygon mask prediction
+- Automatic model loading and configuration
+- Integration with TagMed annotation workflow
+- Mask persistence and management
+- Multi-device support (CUDA, MPS, CPU)
+
+Author: Janik Hohmann
+Institution: University Hospital Düsseldorf
+"""
+
 import os
 import ast
-import tkinter as tk
 import pandas as pd
-import requests
-from tqdm import tqdm
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 import torch
 import cv2
 import numpy as np
-import hydra
 from hydra.core.global_hydra import GlobalHydra
-from hydra import compose, initialize_config_dir
-import matplotlib.pyplot as plt
+from hydra import initialize_config_dir
 
 
 from config_handler import ConfigHandler
-from sam2_tracking import SAM2Tracking
 from mask_handler import MaskHandler
 
 
 class ImageMaskPredictor:
     def __init__(self, gui):
-        self.gui = gui
-
-        self.mask_handler = MaskHandler(gui)
+        """
+        Mask prediction for single images using SAM2 model.
         
-        self.sam2_tracking = SAM2Tracking(gui)
-        sam2_image_predictor = None
-        device = None
+        This class provides comprehensive mask generation capabilities for medical images
+        using Meta's SAM2 architecture. It supports various prompting methods including
+        bounding boxes and polygons, with automatic model management and integration
+        into the TagMed annotation pipeline.
+        
+        Attributes:
+            gui: Reference to the main GUI interface
+            mask_handler (MaskHandler): Mask visualization and persistence management
+            sam2_image_predictor: Loaded SAM2 image predictor instance
+            sam2_model: Loaded SAM2 model for image prediction
+            selected_image_folder (str): Base directory for patient images
+            resize_h, resize_w (int): Display dimensions for image resizing
+        """
+
+        self.gui = gui
+        self.mask_handler = MaskHandler(gui)
         
         model_dir = "../models"  # Directory where the model is saved
         self.abs_model_dir = os.path.abspath(model_dir)
@@ -36,8 +61,6 @@ class ImageMaskPredictor:
         self.sam2_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
         self.config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
         self.config_name = "sam2.1_hiera_l"
-
-
 
         config = ConfigHandler()
         self.selected_image_folder = config.get("selected_image_folder")
@@ -47,10 +70,19 @@ class ImageMaskPredictor:
 
 
     def predict_mask_for_image_bb(self, df_index, x,y,w,h):
+        """
+        Predicts a mask for a single image using a bounding box input with SAM2.
+        Args:
+            df_index (int): Index of the DataFrame row for the current annotation
+            x, y (float): Center coordinates of the bounding box
+            w, h (float): Width and height of the bounding box
+        Returns:
+            str: Path to the saved mask file or None if no mask was generated
+        """
+        # Check if SAM2 is available
         self.sam2_tracking.check_if_sam_2_is_available()
 
-
-        input_box = self.center_to_corners(x, y, w, h)
+        input_box = self.center_to_corners(x, y, w, h) # get bounding box in the format (x0, y0, x1, y1)
 
         # check if an image is selected in the GUI or frame is selected
         if self.gui.selected_image_index is not None:
@@ -76,11 +108,6 @@ class ImageMaskPredictor:
         else:
             selected_annotation = self.gui.img_annotation_listbox.curselection()
             annotation_index = selected_annotation[0]
-        
-
-        # if not hasattr(self, "sam2_predictor") or self.sam2_predictor is None:
-        #     self.sam2_tracking.load_sam2_model()
-        # predictor = self.sam2_tracking.sam2_predictor
         
 
 
@@ -128,6 +155,7 @@ class ImageMaskPredictor:
 
         mask = masks[0]
 
+        # Convert mask to polygon and save mask
         path_mask = self.mask_handler.save_mask(mask, image_id, self.gui.img_selected_class.get(), annotation_index)
 
         if not self.gui.img_annotation_listbox.curselection() and df_index is not None: # mask path only has to be updated if no annotation is selected in the listbox
@@ -139,6 +167,11 @@ class ImageMaskPredictor:
     def predict_mask_for_image_polygon(self, df_index, polygon, width, height):
         """
         Converts a polygon (list of x,y coordinates) to a binary mask.
+        Args:
+            df_index (int): Index of the DataFrame row for the current annotation
+            polygon (list): List of tuples with (x, y) coordinates of the polygon
+            width (int): Width of the image
+            height (int): Height of the image
         """
 
         # check if an image is selected in the GUI or frame is selected

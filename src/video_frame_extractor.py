@@ -1,6 +1,20 @@
 """
-Video Frame Extractor für TagMed
-Intelligente Video-Frame-Extraktion "on-the-fly" für den gallery_navigator.
+Video Frame Extractor for TagMed - Intelligent Video Frame Handling
+
+This module provides intelligent "on-the-fly" video frame extraction for the
+TagMed annotation tool. It automatically detects whether video frames already
+exist or need to be extracted, managing temporary storage during annotation sessions.
+
+Features:
+- Automatic detection: existing frames or extract from video
+- Temporary storage while patient session is active
+- Compatible with existing TagMed structure
+- Automatic cleanup on patient switch
+- Support for multiple video formats
+- Configurable frame extraction intervals
+
+Author: Janik Hohmann
+Institution: University Hospital Düsseldorf
 """
 
 import os
@@ -9,87 +23,107 @@ import tempfile
 import shutil
 from pathlib import Path
 from tqdm import tqdm
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class VideoFrameExtractor:
     """
-    Intelligenter Video-Frame-Extraktor für TagMed.
+    Intelligent video frame extractor for TagMed annotation workflow.
+    
+    This class provides smart frame handling for video annotation by automatically
+    detecting whether frames already exist for a video or need to be extracted.
+    It manages temporary storage during annotation sessions and provides cleanup
+    functionality when switching between patients.
     
     Features:
-    - Automatische Erkennung: Frames vorhanden oder Video extrahieren?
-    - Temporäre Speicherung während Patient aktiv ist
-    - Kompatibel mit bestehender TagMed-Struktur
-    - Automatisches Cleanup beim Patienten-Wechsel
+    - Automatic detection: existing frames vs. video extraction
+    - Temporary storage during active patient sessions
+    - Compatible with existing TagMed folder structure
+    - Automatic cleanup on patient switch
+    - Support for multiple video formats
+    - Configurable extraction parameters
+    
+    Attributes:
+        temp_frame_dirs (dict): Mapping of video paths to temporary directories
+        supported_video_formats (set): Set of supported video file extensions
     """
     
     def __init__(self):
-        """Initialize VideoFrameExtractor."""
-        self.temp_frame_dirs = {}  # Video-Pfad -> temp Verzeichnis
+        """
+        Initialize VideoFrameExtractor with default settings.
+        
+        Sets up temporary directory tracking and defines supported
+        video formats for the extraction process.
+        """
+        self.temp_frame_dirs = {}  # Video path -> temp directory mapping
         self.supported_video_formats = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm'}
         
     def get_video_frames_intelligent(self, patient_id, selected_exam, selected_video, image_folder):
         """
-        Intelligente Frame-Bereitstellung für Videos.
+        Intelligent frame provision for video annotation.
+        
+        This method automatically determines whether to use existing frames
+        or extract new ones from a video file. It first checks for existing
+        frames, and if none are found, extracts frames from the video.
         
         Args:
-            patient_id (str): Patient ID
-            selected_exam (str): Ausgewähltes Exam
-            selected_video (str): Ausgewähltes Video (z.B. "video1.mp4")
-            image_folder (str): Basis-Ordner für Bilder
+            patient_id (str): Patient identifier
+            selected_exam (str): Selected examination folder
+            selected_video (str): Selected video file (e.g. "video1.mp4")
+            image_folder (str): Base folder containing patient data
             
         Returns:
-            list: Sortierte Liste der verfügbaren Frames
+            list: Sorted list of available frame files
         """
         video_base_name = selected_video.split(".")[0]  # "video1.mp4" -> "video1"
         
-        # 1. Prüfe erst, ob bereits Frames vorhanden sind
+        # 1. First check if frames already exist
         existing_frames = self._find_existing_frames(image_folder, video_base_name)
         
         if existing_frames:
-            print(f"[INFO] Gefundene vorhandene Frames für {selected_video}: {len(existing_frames)}")
+            print(f"[INFO] Found existing frames for {selected_video}: {len(existing_frames)}")
             return existing_frames
         
-        # 2. Wenn keine Frames vorhanden, prüfe ob Video existiert
+        # 2. If no frames exist, check if video file exists
         video_path = os.path.join(image_folder, selected_video)
         
         if not os.path.exists(video_path):
-            print(f"[ERROR] Video nicht gefunden: {video_path}")
+            print(f"[ERROR] Video not found: {video_path}")
             return []
             
         if not self._is_video_file(video_path):
-            print(f"[ERROR] Nicht unterstütztes Videoformat: {selected_video}")
+            print(f"[ERROR] Unsupported video format: {selected_video}")
             return []
             
-        print(f"[INFO] Keine Frames gefunden, extrahiere aus Video: {selected_video}")
+        print(f"[INFO] No frames found, extracting from video: {selected_video}")
         
-        # 3. Extrahiere Frames aus Video
+        # 3. Extract frames from video
         extracted_frames = self._extract_frames_from_video(
             video_path=video_path,
             video_base_name=video_base_name,
-            frame_interval=1,  # Jeden 1. Frame (konfigurierbar)
-            max_frames=2000     # Maximum 2000 Frames (konfigurierbar)
+            frame_interval=1,  # Every 1st frame (configurable)
+            max_frames=2000     # Maximum 2000 frames (configurable)
         )
         
         return extracted_frames
     
     def _find_existing_frames(self, image_folder, video_base_name):
         """
-        Sucht nach bereits vorhandenen Frames für ein Video.
+        Search for existing frames corresponding to a video file.
+        
+        Scans the image folder for frame files that match the video's base name
+        and contain frame indicators. Supports common image formats.
         
         Args:
-            image_folder (str): Ordner mit Bildern/Frames
-            video_base_name (str): Basis-Name des Videos (ohne Extension)
+            image_folder (str): Directory to search for existing frames
+            video_base_name (str): Base name of the video (without extension)
             
         Returns:
-            list: Sortierte Liste der gefundenen Frames
+            list: Sorted list of existing frame files, empty if none found
         """
         try:
             all_files = os.listdir(image_folder)
             
-            # Suche nach Dateien, die zum Video gehören und "frame" enthalten
+            # Search for files that belong to the video and contain "frame"
             video_frames = [
                 file for file in all_files 
                 if video_base_name in file and "frame" in file.lower()
@@ -99,45 +133,56 @@ class VideoFrameExtractor:
             return sorted(video_frames)
             
         except Exception as e:
-            print(f"[ERROR] Fehler beim Suchen nach Frames: {e}")
+            print(f"[ERROR] Error searching for frames: {e}")
             return []
     
     def _is_video_file(self, file_path):
-        """Prüft ob Datei ein unterstütztes Videoformat hat."""
+        """
+        Check if a file is a supported video format.
+        
+        Args:
+            file_path (str): Path to the file to check
+            
+        Returns:
+            bool: True if the file is a supported video format
+        """
         return Path(file_path).suffix.lower() in self.supported_video_formats
     
     def _extract_frames_from_video(self, video_path, video_base_name, frame_interval=1, max_frames=2000):
         """
-        Extrahiert Frames aus Video in temporären Ordner.
+        Extract frames from video into temporary directory.
+        
+        Creates a temporary directory and extracts frames from the video
+        at specified intervals. Handles progress display and error recovery.
         
         Args:
-            video_path (str): Pfad zur Videodatei
-            video_base_name (str): Basis-Name für Frame-Dateien
+            video_path (str): Path to the video file
+            video_base_name (str): Base name for frame files
             frame_interval (int): Extrahiere jeden N-ten Frame
             max_frames (int): Maximale Anzahl Frames
             
         Returns:
-            list: Liste der extrahierten Frame-Dateinamen
+            list: list with extracted frame filenames
         """
-        # Prüfe ob bereits extrahiert
+        # check if already extracted frames exist for this video
         if video_path in self.temp_frame_dirs:
             existing_frames = self._get_frames_from_temp_dir(video_path)
             if existing_frames:
-                print(f"[INFO] Frames bereits extrahiert für: {Path(video_path).name}")
+                print(f"[INFO] Frames already extracted for: {Path(video_path).name}")
                 return existing_frames
-        
-        # Erstelle temporären Ordner
+
+        # Create temporary directory
         temp_dir = tempfile.mkdtemp(prefix=f"tagmed_frames_{video_base_name}_")
-        print(f"[INFO] Extrahiere Frames nach: {temp_dir}")
-        
+        print(f"[INFO] Extracting frames to: {temp_dir}")
+
         try:
-            # Öffne Video
+            # Open video
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
-                print(f"[ERROR] Kann Video nicht öffnen: {video_path}")
+                print(f"[ERROR] Cannot open video: {video_path}")
                 return []
-            
-            # Video-Eigenschaften
+
+            # Video properties
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             duration = total_frames / fps if fps > 0 else 0
@@ -150,21 +195,21 @@ class VideoFrameExtractor:
             
             # Progress bar
             expected_frames = min(total_frames // frame_interval, max_frames)
-            pbar = tqdm(total=expected_frames, desc=f"Extrahiere {Path(video_path).name}", unit="frames")
-            
+            pbar = tqdm(total=expected_frames, desc=f"extracting {Path(video_path).name}", unit="frames")
+
             while frame_number < total_frames and extracted_count < max_frames:
                 ret, frame = cap.read()
                 if not ret:
                     break
                 
-                # Extrahiere Frame in bestimmten Intervallen
+                # extract every N-th frame
                 if frame_number % frame_interval == 0:
-                    # Frame-Name kompatibel mit bestehender Struktur (beginne mit Frame 1)
+                    # Frame name compatible with SAM2 structure (start with frame 1)
                     frame_display_number = (frame_number // frame_interval) + 1
                     frame_filename = f"{video_base_name}_frame_{frame_display_number:06d}.jpg"
                     frame_path = Path(temp_dir) / frame_filename
-                    
-                    # Speichere Frame
+
+                    # Save frame
                     cv2.imwrite(str(frame_path), frame)
                     extracted_frame_names.append(frame_filename)
                     extracted_count += 1
@@ -174,30 +219,30 @@ class VideoFrameExtractor:
             
             pbar.close()
             cap.release()
-            
-            print(f"[INFO] {extracted_count} Frames extrahiert aus {Path(video_path).name}")
-            
-            # Speichere temp Verzeichnis
+
+            print(f"[INFO] {extracted_count} frames extracted from {Path(video_path).name}")
+
+            # Save temp directory
             self.temp_frame_dirs[video_path] = temp_dir
             
             return sorted(extracted_frame_names)
             
         except Exception as e:
-            print(f"[ERROR] Frame-Extraktion fehlgeschlagen: {e}")
-            # Cleanup bei Fehler
+            print(f"[ERROR] Frame extraction failed: {e}")
+            # Cleanup on error
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
             return []
     
     def _get_frames_from_temp_dir(self, video_path):
         """
-        Holt Frame-Namen aus bereits extrahiertem temp Verzeichnis.
+        Gets frame filenames from already extracted temp directory.
         
         Args:
-            video_path (str): Pfad zur ursprünglichen Videodatei
-            
+            video_path (str): Path to the original video file
+
         Returns:
-            list: Sortierte Liste der Frame-Dateinamen
+            list: Sorted list of frame filenames
         """
         if video_path not in self.temp_frame_dirs:
             return []
@@ -205,8 +250,8 @@ class VideoFrameExtractor:
         temp_dir = Path(self.temp_frame_dirs[video_path])
         if not temp_dir.exists():
             return []
-        
-        # Finde alle Frame-Dateien
+
+        # Find all frame files
         frame_files = [
             f.name for f in temp_dir.glob('*_frame_*.jpg')
         ]
@@ -215,76 +260,76 @@ class VideoFrameExtractor:
     
     def get_frame_path(self, patient_id, selected_exam, selected_video, frame_filename, image_folder):
         """
-        Gibt den vollständigen Pfad zu einem Frame zurück.
+        Gives back the full path to a specific frame.
         
         Args:
             patient_id (str): Patient ID
             selected_exam (str): Exam ID
             selected_video (str): Video Name
-            frame_filename (str): Frame-Dateiname
-            image_folder (str): Basis-Bildordner
-            
+            frame_filename (str): Frame filename
+            image_folder (str): Base image folder
+
         Returns:
-            str: Vollständiger Pfad zum Frame
+            str: Full path to the frame
         """
         video_path = os.path.join(image_folder, selected_video)
-        
-        # Prüfe ob Frame aus temporärem Verzeichnis kommt
+
+        # Check if frame comes from temporary directory
         if video_path in self.temp_frame_dirs:
             temp_dir = self.temp_frame_dirs[video_path]
             frame_path = os.path.join(temp_dir, frame_filename)
             if os.path.exists(frame_path):
                 return frame_path
         
-        # Sonst normaler Pfad im image_folder
+        # Otherwise normal path in image_folder
         return os.path.join(image_folder, frame_filename)
     
     def cleanup_temp_frames(self, video_path=None):
         """
-        Löscht temporäre Frame-Verzeichnisse.
-        
+        Deletes temporary frame directories.
+
         Args:
-            video_path (str, optional): Spezifisches Video (None = alle)
+            video_path (str, optional): Specific video (None = all)
         """
         if video_path:
-            # Cleanup für spezifisches Video
+            # Cleanup for specific video
             if video_path in self.temp_frame_dirs:
                 temp_dir = self.temp_frame_dirs[video_path]
                 if os.path.exists(temp_dir):
                     try:
                         shutil.rmtree(temp_dir)
-                        print(f"[INFO] Temporäre Frames gelöscht für: {Path(video_path).name}")
+                        print(f"[INFO] Temporary frames deleted for: {Path(video_path).name}")
                     except Exception as e:
-                        print(f"[WARNING] Konnte temp Verzeichnis nicht löschen: {e}")
+                        print(f"[WARNING] Could not delete temp directory: {e}")
                 del self.temp_frame_dirs[video_path]
         else:
-            # Cleanup für alle Videos
+            # Cleanup for all videos
             for video_path, temp_dir in list(self.temp_frame_dirs.items()):
                 if os.path.exists(temp_dir):
                     try:
                         shutil.rmtree(temp_dir)
-                        print(f"[INFO] Temporäre Frames gelöscht: {temp_dir}")
+                        print(f"[INFO] Temporary frames deleted: {temp_dir}")
                     except Exception as e:
-                        print(f"[WARNING] Konnte temp Verzeichnis nicht löschen: {e}")
+                        print(f"[WARNING] Could not delete temp directory: {e}")
             self.temp_frame_dirs.clear()
     
     def cleanup_on_patient_switch(self):
         """
-        Cleanup beim Patienten-Wechsel.
-        Löscht alle temporären Frame-Verzeichnisse.
+        Cleanup when switching patients.
+        Deletes all temporary frame directories.
         """
-        print("[INFO] Cleanup temporärer Frames beim Patienten-Wechsel...")
-        self.cleanup_temp_frames()  # Löscht alle temp Verzeichnisse
-    
+        print("[INFO] Cleanup temporary frames when switching patients...")
+        self.cleanup_temp_frames()  # Deletes all temp directories
+
     def get_video_info(self, video_path):
         """
-        Holt Video-Informationen ohne Frame-Extraktion.
-        
+        Gets video information without frame extraction.
+
         Args:
-            video_path (str): Pfad zur Videodatei
-            
+            video_path (str): Path to the video file
+
         Returns:
-            dict: Video-Eigenschaften
+            dict: Video properties
         """
         try:
             cap = cv2.VideoCapture(video_path)
@@ -306,5 +351,5 @@ class VideoFrameExtractor:
             return info
             
         except Exception as e:
-            print(f"[ERROR] Fehler beim Laden der Video-Info: {e}")
+            print(f"[ERROR] Error loading video info: {e}")
             return None
