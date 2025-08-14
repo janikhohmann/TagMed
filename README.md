@@ -34,7 +34,7 @@ git clone https://github.com/janikhohmann/TagMed.git
 cd TagMed
 ```
 
-**Install all requirements:**
+**Install all requirements and create an virtual environment:**
 ```bash
 python setup_TagMed.py
 ```
@@ -86,11 +86,12 @@ We recommend that you name or number your images as follows: <br>
 {num_patient}_{num_exam}_{num_image}
 Example: 000001_01_00001.jpg
 ```
-Videos should be named in the same pattern. If your videos already are framed add the frame number as suffix.
+Videos should be named in the same pattern. If your videos are already framed, add the frame number as a suffix. If not, TagMed will automatically divide the videos into frames. These frames are not saved, but are only generated for annotation purposes.
 ```
 {num_patient}_{num_exam}_{num_image}_frame{num_frame}
 Example: 000001_01_00001_frame00001.jpg
 ```
+
 
 #### Medical Reports
 To use this function, a table containing all medical reports is required.

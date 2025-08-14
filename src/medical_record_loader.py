@@ -1,6 +1,5 @@
 
 import pandas as pd
-import tkinter as tk
 import os
 
 from config_handler import ConfigHandler
