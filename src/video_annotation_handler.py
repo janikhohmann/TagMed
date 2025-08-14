@@ -402,7 +402,7 @@ class VideoAnnotationHandler():
         current_image_id = self.gui.current_frames[self.gui.current_frame_index].split(".")[0]
         self.current_image_id = current_image_id
 
-        print(f"[DEBUG] Handler: Loading annotations for frame_id: '{self.current_image_id}'")
+        # print(f"[DEBUG] Handler: Loading annotations for frame_id: '{self.current_image_id}'")
 
         df = self.gui.all_annotations
 
@@ -1343,7 +1343,7 @@ class VideoAnnotationHandler():
         )
         
         self.frame_path = frame_path
-        print(f"[DEBUG] Loading frame: {frame_path}")
+        # print(f"[DEBUG] Loading frame: {frame_path}")
         
         try:
             # Load and process frame image

@@ -204,7 +204,7 @@ class GalleryNavigator:
         scrollbar_des.pack(side="right", fill="y")
 
         # Create the Text widget to display the description and link it with the scrollbar
-        self.des_textbox_img = tk.Text(description_frame, yscrollcommand=scrollbar_des.set)
+        self.des_textbox_img = tk.Text(description_frame, yscrollcommand=scrollbar_des.set, state="disabled")
         self.des_textbox_img.pack(fill="both", expand=True)
 
         # Link the scrollbar to the description box
@@ -284,7 +284,7 @@ class GalleryNavigator:
         scrollbar_des.pack(side="right", fill="y")
 
         # Create the Text widget to display the description and link it with the scrollbar
-        self.des_textbox_video = tk.Text(description_frame, yscrollcommand=scrollbar_des.set)
+        self.des_textbox_video = tk.Text(description_frame, yscrollcommand=scrollbar_des.set, state="disabled")
         self.des_textbox_video.pack(fill="both", expand=True)
 
         # Link the scrollbar to the description box
@@ -346,12 +346,19 @@ class GalleryNavigator:
         for video in videos:
             self.video_listbox.insert(tk.END, video)
 
-        # clean up the textboxes before filling them and then filling them with new medical reports
-        self.des_textbox_img.delete("1.0", tk.END)
-        self.des_textbox_video.delete("1.0", tk.END)
+        # Clean up and update textboxes with medical reports
+        # Image description textbox
+        self.des_textbox_img.config(state="normal")        # Temporarily enable editing
+        self.des_textbox_img.delete("1.0", tk.END)         # Clear existing content
         medical_record = self.medical_record_loader.fill_description(selected_exam)
-        self.des_textbox_img.insert(tk.END, medical_record)
-        self.des_textbox_video.insert(tk.END, medical_record)
+        self.des_textbox_img.insert(tk.END, medical_record) # Insert new content
+        self.des_textbox_img.config(state="disabled")      # Re-disable editing
+        
+        # Video description textbox
+        self.des_textbox_video.config(state="normal")      # Temporarily enable editing
+        self.des_textbox_video.delete("1.0", tk.END)       # Clear existing content
+        self.des_textbox_video.insert(tk.END, medical_record) # Insert new content
+        self.des_textbox_video.config(state="disabled")    # Re-disable editing
 
         self.img_annotation_handler.update_image_listbox_with_annotation_colors()
         self.video_annotation_handler.update_video_listbox_with_annotation_colors()
@@ -546,13 +553,13 @@ class GalleryNavigator:
 
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.img_annotation_type = tk.StringVar()
-        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_annotation_type, values=["Bounding Box", "Polygon"], width=15)
+        type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_annotation_type, values=["Bounding Box", "Polygon"], width=15, state="readonly")
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
         tk.Label(dropdown_frame, text="Class:").pack(anchor="w", padx=5)
         self.img_selected_class = tk.StringVar()
-        class_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_selected_class, values=self.class_list, width=15)
+        class_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.img_selected_class, values=self.class_list, width=15, state="readonly")
         class_dropdown.pack(anchor="w", padx=5)
         if self.class_list: # Set default only if list is not empty
             class_dropdown.current(0)
@@ -668,14 +675,14 @@ class GalleryNavigator:
         tk.Label(dropdown_frame, text="Type:").pack(anchor="w", padx=5)
         self.video_annotation_type = tk.StringVar()
         type_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_annotation_type,
-                                    values=["Bounding Box", "Polygon"], width=15)
+                                    values=["Bounding Box", "Polygon"], width=15, state="readonly")
         type_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         type_dropdown.current(0)
 
         tk.Label(dropdown_frame, text="Class:").pack(anchor="w", padx=5)
         self.video_selected_class = tk.StringVar()
         class_dropdown = ttk.Combobox(dropdown_frame, textvariable=self.video_selected_class,
-                                    values=self.class_list, width=15)
+                                    values=self.class_list, width=15, state="readonly")
         class_dropdown.pack(anchor="w", padx=5, pady=(0, 10))
         if self.class_list:
             class_dropdown.current(0)
@@ -765,7 +772,7 @@ class GalleryNavigator:
         # Tracking-Dropdown
         self.tracking_type = tk.StringVar()
         tracking_dropdown = ttk.Combobox(tracker_controls_row, textvariable=self.tracking_type,
-                                        values=["Simple", "SAM2 large", "SAM2 tiny","MedSAM2", "MedSAM2 US Heart", "MedSAM2 MRI Liver Lesion"], width=20)
+                                        values=["Simple", "SAM2 large", "SAM2 tiny","MedSAM2", "MedSAM2 US Heart", "MedSAM2 MRI Liver Lesion"], width=20, state="readonly")
         tracking_dropdown.pack(side="left", padx=5)
         tracking_dropdown.current(0)
 
