@@ -1,3 +1,31 @@
+"""
+SAM2 Tracking - Segment Anything 2 Video Tracking Integration
+
+This module provides video tracking capabilities using Meta's SAM2 (Segment Anything 2)
+models for object tracking and segmentation in medical videos. It supports both
+large and tiny SAM2 model variants with automatic downloading and configuration.
+
+Features:
+- SAM2 large and tiny model variants
+- Automatic model downloading from Meta AI
+- Video frame-by-frame tracking with temporal consistency
+- Integration with TagMed annotation workflow
+- Hydra configuration management for SAM2 parameters
+- Advanced segmentation prompting (boxes, masks)
+
+SAM2 Paper:
+@article{ravi2024sam2,
+  title={SAM 2: Segment Anything in Images and Videos},
+  author={Ravi, Nikhila and Gabeur, Valentin and Hu, Yuan-Ting and Hu, Ronghang and Ryali, Chaitanya and Ma, Tengyu and Khedr, Haitham and R{\"a}dle, Roman and Rolland, Chloe and Gustafson, Laura and Mintun, Eric and Pan, Junting and Alwala, Kalyan Vasudev and Carion, Nicolas and Wu, Chao-Yuan and Girshick, Ross and Doll{\'a}r, Piotr and Feichtenhofer, Christoph},
+  journal={arXiv preprint arXiv:2408.00714},
+  url={https://arxiv.org/abs/2408.00714},
+  year={2024}
+}
+
+Author: Janik Hohmann
+Institution: University Hospital Düsseldorf
+"""
+
 import os
 import numpy as np
 import cv2
@@ -5,7 +33,7 @@ import requests
 import ast
 import torch
 import pandas as pd
-from hydra import compose, initialize_config_dir
+from hydra import initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 
 from config_handler import ConfigHandler
@@ -14,12 +42,39 @@ from mask_handler import MaskHandler
 
 
 class SAM2Tracking:
+    """
+    Video tracking and segmentation using Meta's SAM2 (Segment Anything 2) models.
+    
+    This class provides advanced video tracking capabilities using SAM2 large
+    and tiny models. It handles model downloading, configuration, and frame-by-frame
+    tracking with temporal consistency for medical video annotation workflows.
+    
+    Attributes:
+        gui: Reference to the main GUI interface
+        config_handler (ConfigHandler): Configuration management
+        video_annotation_handler (VideoAnnotationHandler): Video annotation interface
+        mask_handler (MaskHandler): Mask visualization and management
+        sam2_predictor: Loaded SAM2 model instance
+        inference_state: Video tracking state for temporal consistency
+    """
+    
     def __init__(self, gui):
+        """
+        Initialize SAM2 tracking with configuration and model setup.
+        
+        Sets up the tracking environment, model paths, and integrates with
+        the annotation workflow. Prepares for downloading and loading
+        appropriate SAM2 model variants (large or tiny).
+        
+        Args:
+            gui: Main GUI interface reference for integration
+        """
         self.gui = gui
         self.config_handler = ConfigHandler()
         self.video_annotation_handler = VideoAnnotationHandler(gui)
         self.mask_handler = MaskHandler(gui)
 
+        # Load configuration settings
         config = ConfigHandler()
         self.selected_image_folder = config.get("selected_image_folder")
         self.selected_anno_table_file = config.get("selected_anno_table_file")
@@ -27,10 +82,11 @@ class SAM2Tracking:
         self.class_list = config.get("class_list")
         self.image_size = config.get("image_size", (600, 600))  # Default image size if not set        
 
-        model_dir="../models"  # Verzeichnis, in dem das Modell gespeichert wird
+        # Model directory setup
+        model_dir="../models"  # Directory where the model is saved
         self.abs_model_dir = os.path.abspath(model_dir)
 
-        #self.sam2_model_l_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
+        # Model instances
         self.sam2_predictor = None
         self.inference_state = None  # For video tracking state
 
@@ -38,8 +94,19 @@ class SAM2Tracking:
 
 
     def check_if_sam_2_is_available(self):
+        """
+        Configure SAM2 model based on selected tracking type.
+        
+        Sets the appropriate model URL, local path, and configuration
+        based on the user's selection of SAM2 variant:
+        - SAM2 large: High-accuracy model for detailed segmentation
+        - SAM2 tiny: Lightweight model for faster processing
+        """
         SAM2p1_BASE_URL="https://dl.fbaipublicfiles.com/segment_anything_2/092824"
-        self.config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
+
+        # Path to custom config
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config_path = os.path.join(script_dir, "configs") # Directory where the config files are saved
 
         print(self.gui.tracking_type.get())
         if self.gui.tracking_type.get() == "SAM2 large":
@@ -66,17 +133,17 @@ class SAM2Tracking:
                 return False
 
     def download_sam_2_model(self):
-        # Sicherstellen, dass das Zielverzeichnis existiert
+        # Ensure that the target directory exists
         os.makedirs(self.abs_model_dir, exist_ok=True)
 
-        # Überprüfen, ob die Datei bereits existiert
+        # Check if the file already exists
         if os.path.exists(self.sam2p1_model_path):
             print(f"SAM2 model already exists at: {self.sam2p1_model_path}")
         else:
             print(f"Trying to download SAM2 model to: {self.sam2p1_model_path}")
             try:
                 response = requests.get(self.sam2p1_url, stream=True)
-                response.raise_for_status()  # Fehler auslösen bei Problemen
+                response.raise_for_status()  # Raise errors on problems
                 print(f"Downloading SAM2 model from {self.sam2p1_url}...")
 
                 total_size = int(response.headers.get('content-length', 0))
@@ -161,46 +228,6 @@ class SAM2Tracking:
             traceback.print_exc()
             self.sam2_predictor = None
 
-    # def load_sam2_model(self):
-    #     """
-    #     Loads the SAM2 video predictor for video tracking.
-    #     This should be called once during initialization.
-    #     """
-    #     try:
-    #         from sam2.build_sam import build_sam2_video_predictor
-            
-    #         device = "cuda" if torch.cuda.is_available() else "cpu"
-    #         print(f"[INFO] Loading SAM2 video predictor on {device}")
-            
-    #         # Set device-specific configurations
-    #         if device == "cuda":
-    #             # use bfloat16 for the entire workflow
-    #             torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
-    #             # turn on tfloat32 for Ampere GPUs
-    #             if torch.cuda.get_device_properties(0).major >= 8:
-    #                 torch.backends.cuda.matmul.allow_tf32 = True
-    #                 torch.backends.cudnn.allow_tf32 = True
-    #         elif device == "mps":
-    #             print(
-    #                 "\nSupport for MPS devices is preliminary. SAM 2 is trained with CUDA and might "
-    #                 "give numerically different outputs and sometimes degraded performance on MPS."
-    #             )
-            
-    #         # Use the downloaded model checkpoint
-    #         sam2_checkpoint = self.sam2p1_model_path
-    #         model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
-            
-    #         self.sam2_predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
-    #         self.inference_state = None  # Will be initialized per video sequence
-    #         print("[INFO] SAM2 video predictor successfully loaded.")
-
-    #     except Exception as e:
-    #         import traceback
-    #         print(f"[ERROR] Failed to load SAM2 video predictor: {e}")
-    #         traceback.print_exc()
-    #         self.sam2_predictor = None
-
-
             
     def sam2_tracking_method(self):
         """
@@ -223,9 +250,15 @@ class SAM2Tracking:
 
         # Check if we have the video predictor loaded
         if not hasattr(self, "sam2_predictor") or self.sam2_predictor is None:
+            # print("[INFO] SAM2 predictor not loaded, attempting to load...")
             self.load_sam2_model()
         predictor = self.sam2_predictor
 
+        # Verify predictor is loaded after attempt
+        if self.sam2_predictor is None:
+            print("[ERROR] Failed to load SAM2 predictor. Cannot proceed with tracking.")
+            return
+        
         # Initialize video sequence - use VideoFrameExtractor for correct frame paths
         video_folder = os.path.join(self.selected_image_folder, self.gui.patient_id, self.gui.selected_exam)
         temp_video_dir = self._create_temp_video_directory_with_extractor(video_folder, current_frames)
@@ -240,34 +273,22 @@ class SAM2Tracking:
             
             resize_h, resize_w = self.image_size
 
-            print(f"[INFO] Initializing SAM2 video predictor for temp video path: {temp_video_dir}")
-            print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
-            print(f"[DEBUG] Number of frames: {len(current_frames)}")
-            print(f"[DEBUG] Current frame index: {current_frame_index}")
+            # print(f"[INFO] Initializing SAM2 video predictor for temp video path: {temp_video_dir}")
+            # print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
+            # print(f"[DEBUG] Number of frames: {len(current_frames)}")
+            # print(f"[DEBUG] Current frame index: {current_frame_index}")
             
             try:
-                print("[DEBUG] Calling predictor.init_state()...")
+                # print("[DEBUG] Calling predictor.init_state()...")
                 self.inference_state = predictor.init_state(video_path=temp_video_dir)
-                print("[DEBUG] init_state() completed successfully")
+                # print("[DEBUG] init_state() completed successfully")
             except Exception as e:
                 print(f"[ERROR] Failed to initialize inference state: {e}")
                 self._cleanup_temp_directory(temp_video_dir)
                 return
             
-        
-        # # Reset any previous state and initialize for this video sequence
-        # if hasattr(self, 'inference_state') and self.inference_state is not None:
-        #     predictor.reset_state(self.inference_state)
-        
-        # resize_h, resize_w = self.image_size
 
-        # print(f"[INFO] Initializing SAM2 video predictor for temp video path: {temp_video_dir}")
-        # print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
-        # print(f"[DEBUG] Number of frames: {len(current_frames)}")
-        # print(f"[DEBUG] Current frame index: {current_frame_index}")
-        # self.inference_state = predictor.init_state(video_path=temp_video_dir)
-
-        # Check if Polygon or Bounding Box
+            # Check if Polygon or Bounding Box
             selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
             is_polygon = "Polygon" in selected_text
 
@@ -312,9 +333,9 @@ class SAM2Tracking:
                         centroid_x = int(np.mean(scaled_points[:, 0]))
                         centroid_y = int(np.mean(scaled_points[:, 1]))
                         
-                        print(f"[DEBUG] Original polygon centroid: ({np.mean(points_array[:, 0])}, {np.mean(points_array[:, 1])})")
-                        print(f"[DEBUG] Scaled polygon centroid: ({centroid_x}, {centroid_y})")
-                        print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
+                        # print(f"[DEBUG] Original polygon centroid: ({np.mean(points_array[:, 0])}, {np.mean(points_array[:, 1])})")
+                        # print(f"[DEBUG] Scaled polygon centroid: ({centroid_x}, {centroid_y})")
+                        # print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
                     else:
                         centroid_x = int(np.mean(points_array[:, 0]))
                         centroid_y = int(np.mean(points_array[:, 1]))
@@ -324,13 +345,21 @@ class SAM2Tracking:
                     points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
                     labels = np.array([1], np.int32)  # Positive click
                     
-                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                        inference_state=self.inference_state,
-                        frame_idx=current_frame_index,
-                        obj_id=ann_obj_id,
-                        points=points,
-                        labels=labels,
-                    )
+                    # print(f"[DEBUG] Adding points for polygon tracking: points={points}, labels={labels}, obj_id={ann_obj_id}")
+                    try:
+                        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                            inference_state=self.inference_state,
+                            frame_idx=current_frame_index,
+                            obj_id=ann_obj_id,
+                            points=points,
+                            labels=labels,
+                        )
+                        # print(f"[DEBUG] add_new_points_or_box completed successfully for polygon")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to add points for polygon tracking: {e}")
+                        self._cleanup_temp_directory(temp_video_dir)
+                        return
+
 
                 except IndexError:
                     print(f"[ERROR] Polygon index {selected_annotation_index} out of range.")
@@ -371,10 +400,10 @@ class SAM2Tracking:
                         scaled_w = w * scale_x
                         scaled_h = h * scale_y
                         
-                        print(f"[DEBUG] Original coords: x={x}, y={y}, w={w}, h={h}")
-                        print(f"[DEBUG] Scaled coords: x={scaled_x}, y={scaled_y}, w={scaled_w}, h={scaled_h}")
-                        print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
-                        print(f"[DEBUG] Original frame size: {original_width}x{original_height}, GUI size: {resize_w}x{resize_h}")
+                        # print(f"[DEBUG] Original coords: x={x}, y={y}, w={w}, h={h}")
+                        # print(f"[DEBUG] Scaled coords: x={scaled_x}, y={scaled_y}, w={scaled_w}, h={scaled_h}")
+                        # print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
+                        # print(f"[DEBUG] Original frame size: {original_width}x{original_height}, GUI size: {resize_w}x{resize_h}")
                         
                         input_box = self.center_to_corners(scaled_x, scaled_y, scaled_w, scaled_h)
                     else:
@@ -382,15 +411,22 @@ class SAM2Tracking:
                     
                     ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
 
-                    print(f"[DEBUG] Starting tracking with bbox: x={x}, y={y}, w={w}, h={h}")
-                    print(f"[DEBUG] SAM2 input_box: {input_box}")
+                    # print(f"[DEBUG] Starting tracking with bbox: x={x}, y={y}, w={w}, h={h}")
+                    # print(f"[DEBUG] SAM2 input_box: {input_box}")
                     
-                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                        inference_state=self.inference_state,
-                        frame_idx=current_frame_index,
-                        obj_id=ann_obj_id,
-                        box=input_box,
-                    )
+                    try:
+                        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                            inference_state=self.inference_state,
+                            frame_idx=current_frame_index,
+                            obj_id=ann_obj_id,
+                            box=input_box,
+                        )
+                        # print(f"[DEBUG] add_new_points_or_box completed successfully for bounding box")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to add bounding box for tracking: {e}")
+                        self._cleanup_temp_directory(temp_video_dir)
+                        return
+
 
                 except IndexError:
                     print(f"[ERROR] Bounding box index {selected_annotation_index} out of range.")
@@ -398,16 +434,29 @@ class SAM2Tracking:
                     return
 
             # ===== PROPAGATE THROUGH VIDEO =====
-            print("[INFO] Propagating annotations through video...")
+            print("[INFO] Propagating annotations through video with SAM2...")
             
             # Collect results in a dict
             video_segments = {}
-            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.inference_state):
-                video_segments[out_frame_idx] = {
-                    out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
-                    for i, out_obj_id in enumerate(out_obj_ids)
-                }
-
+            try:
+                print("[DEBUG] Starting propagate_in_video()...")
+                frame_count = 0
+                for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.inference_state):
+                    frame_count += 1
+                    #if frame_count % 10 == 0:  # Progress indicator every 10 frames
+                        #print(f"[DEBUG] Processed {frame_count} frames...")
+                    
+                    video_segments[out_frame_idx] = {
+                        out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                        for i, out_obj_id in enumerate(out_obj_ids)
+                    }
+                print(f"[DEBUG] propagate_in_video() completed successfully. Processed {frame_count} frames.")
+            except Exception as e:
+                print(f"[ERROR] Failed during video propagation: {e}")
+                import traceback
+                traceback.print_exc()
+                self._cleanup_temp_directory(temp_video_dir)
+                return
             # Process results for frames starting from current frame
             frames_processed = 0
             for frame_idx in range(current_frame_index, len(current_frames)):
@@ -424,7 +473,6 @@ class SAM2Tracking:
                         print(f"[INFO] Empty mask for frame {next_img_id}")
                         continue
 
-                    # Save mask (ensure it's 2D before saving)
                     # Scale mask to GUI size for consistency with annotations
                     if mask.shape != (resize_h, resize_w):
                         # Scale mask to GUI size
@@ -544,14 +592,14 @@ class SAM2Tracking:
 
     def _get_frame_path(self, video_folder, frame_filename):
         """
-        Verwendet VideoFrameExtractor um den korrekten Pfad zu einem Frame zu bekommen.
+        Uses VideoFrameExtractor to obtain the correct path to a frame.
         
         Args:
-            video_folder (str): Basis-Ordner für Videos/Frames
-            frame_filename (str): Name der Frame-Datei
+            video_folder (str): Base folder for videos/frames
+            frame_filename (str): Name of the frame file
             
         Returns:
-            str: Vollständiger Pfad zum Frame
+            str: Full path to the frame
         """
         if hasattr(self.gui, 'video_frame_extractor'):
             return self.gui.video_frame_extractor.get_frame_path(
@@ -562,16 +610,15 @@ class SAM2Tracking:
                 image_folder=video_folder
             )
         else:
-            # Fallback auf alte Methode
+            # Fallback to old method
             return os.path.join(video_folder, frame_filename)
 
     def _create_temp_video_directory_with_extractor(self, video_folder, current_frames):
         """
-        Erstellt ein temporäres Verzeichnis mit Symlinks zu Video-Frames unter Verwendung des VideoFrameExtractors.
-        SAM2 erwartet Frames mit Namen wie 00000.jpg, 00001.jpg, etc.
+        Creates a temporary directory with symlinks to video frames using the VideoFrameExtractor.
+        SAM2 expects frames with names like 00000.jpg, 00001.jpg, etc.
         """
         import tempfile
-        import shutil
         
         # Create temporary directory
         temp_dir = tempfile.mkdtemp(prefix="sam2_video_")
@@ -618,7 +665,7 @@ class SAM2Tracking:
 # ====== Helper Functions ======
 
     def _safe_parse_list(self, value):
-        """Hilfsfunktion zum sicheren Parsen von Listen aus Strings oder Listen."""
+        """Helper function for safely parsing lists from strings or lists."""
         if isinstance(value, list):
             return value
         if pd.isna(value) or value in ("NN", "", None):

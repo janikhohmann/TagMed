@@ -1,8 +1,24 @@
+"""
+TagMed Mask Handler - Mask visualization and management for medical annotation
+
+This module provides comprehensive mask handling capabilities for the TagMed medical
+annotation application. It manages mask storage, visualization, and manipulation
+for both individual images and video frame sequences.
+
+Key Features:
+- Mask persistence with compressed NPZ format
+- Dual-canvas support (image and video frame canvases)
+- Transparent overlay rendering with customizable colors
+- Batch mask operations for video sequences
+- Memory-efficient mask loading and garbage collection management
+
+Author: Janik Hohmann
+Institution: University Hospital Düsseldorf
+"""
+
 import numpy as np
 import os
 from PIL import Image, ImageTk
-
-#from video_annotation_handler import VideoAnnotationHandler
 
 
 
@@ -20,7 +36,7 @@ class MaskHandler:
         Load a mask from a file with the format:
         <img_id>_<class>_<index>.npz.
         """
-        mask_path = f"{self.mask_dir}/{image_id}_{mask_class}_{mask_idx}.npy"
+        mask_path = f"{self.mask_dir}/{image_id}_{mask_class}_{mask_idx}.np"
         try:
             mask = np.load(mask_path)
             return mask

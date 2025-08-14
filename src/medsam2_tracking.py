@@ -1,3 +1,30 @@
+"""
+MedSAM2 Tracking - Medical Video Segmentation and Tracking
+
+This module provides specialized tracking capabilities using MedSAM2 models
+for medical image and video segmentation. It supports multiple MedSAM2 variants
+including general, ultrasound heart, and MRI liver lesion specific models.
+
+Features:
+- Multiple MedSAM2 model variants (general, US heart, MRI liver lesion)
+- Automatic model downloading from Hugging Face
+- Video frame-by-frame tracking with state persistence
+- Integration with TagMed annotation workflow
+- Medical image specific optimizations
+- Hydra configuration management for SAM2 parameters
+
+MedSAM2 Paper:
+@article{MedSAM2,
+    title={MedSAM2: Segment Anything in 3D Medical Images and Videos},
+    author={Ma, Jun and Yang, Zongxin and Kim, Sumin and Chen, Bihui and Baharoon, Mohammed and Fallahpour, Adibvafa and Asakereh, Reza and Lyu, Hongwei and Wang, Bo},
+    journal={arXiv preprint arXiv:2504.03600},
+    year={2025}
+}
+
+Author: Janik Hohmann
+Institution: University Hospital Düsseldorf
+"""
+
 import os
 import numpy as np
 import cv2
@@ -6,7 +33,7 @@ import ast
 import tqdm
 import torch
 import pandas as pd
-from hydra import compose, initialize_config_dir
+from hydra import initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 
 from config_handler import ConfigHandler
@@ -15,12 +42,39 @@ from mask_handler import MaskHandler
 
 
 class MedSAM2Tracking:
+    """
+    Advanced medical video tracking using MedSAM2 models.
+    
+    This class provides specialized tracking capabilities for medical videos
+    using various MedSAM2 model variants. It handles model downloading,
+    configuration, and frame-by-frame tracking with medical image optimizations.
+    
+    Attributes:
+        gui: Reference to the main GUI interface
+        config_handler (ConfigHandler): Configuration management
+        video_annotation_handler (VideoAnnotationHandler): Video annotation interface
+        mask_handler (MaskHandler): Mask visualization and management
+        medsam2_predictor: Loaded MedSAM2 model instance
+        inference_state: Video tracking state for temporal consistency
+    """
+    
     def __init__(self, gui):
+        """
+        Initialize MedSAM2 tracking with configuration and model setup.
+        
+        Sets up the tracking environment, model paths, and integrates with
+        the annotation workflow. Prepares for downloading and loading
+        appropriate MedSAM2 model variants.
+        
+        Args:
+            gui: Main GUI interface reference for integration
+        """
         self.gui = gui
         self.config_handler = ConfigHandler()
         self.video_annotation_handler = VideoAnnotationHandler(gui)
         self.mask_handler = MaskHandler(gui)
 
+        # Load configuration settings
         config = ConfigHandler()
         self.selected_image_folder = config.get("selected_image_folder")
         self.selected_anno_table_file = config.get("selected_anno_table_file")
@@ -32,15 +86,26 @@ class MedSAM2Tracking:
         self.MEDSAM2_BASE_URL = "https://huggingface.co/wanglab/MedSAM2/resolve/main"
         model_dir = "../models"  # Directory where the model is saved
         self.abs_model_dir = os.path.abspath(model_dir)
-        # set a fallback model
+
+        # ==== Set a fallback model ====
         self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
         self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_latest.pt")
         self.config_name = "sam2.1_hiera_t512"
 
+        # Model instances
         self.medsam2_predictor = None
         self.inference_state = None  # For video tracking state
 
     def check_if_medsam2_is_available(self):
+        """
+        Configure MedSAM2 model based on selected tracking type.
+        
+        Sets the appropriate model URL, local path, and configuration
+        based on the user's selection of MedSAM2 variant:
+        - MedSAM2: General medical imaging model
+        - MedSAM2 US Heart: Specialized for ultrasound heart imaging
+        - MedSAM2 MRI Liver Lesion: Specialized for MRI liver lesion detection
+        """
         if self.gui.tracking_type.get() == "MedSAM2":
             self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
             self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_latest.pt")
@@ -67,6 +132,11 @@ class MedSAM2Tracking:
                 return False
 
     def download_medsam2_model(self):
+        """
+        Download the MedSAM2 model from Hugging Face if not already present.
+        Ensures the model directory exists, checks if the model file is already
+        downloaded, and if not, downloads it with progress indication.
+        """
         # Ensure the target directory exists
         os.makedirs(self.abs_model_dir, exist_ok=True)
 
@@ -81,7 +151,7 @@ class MedSAM2Tracking:
 
                 total_size = int(response.headers.get('content-length', 0))
                 with open(self.medsam2_model_path, 'wb') as file, tqdm.tqdm(
-                    desc="MedSAM2 Latest Download",
+                    desc="MedSAM2 Download",
                     total=total_size,
                     unit='B',
                     unit_scale=True,
@@ -136,7 +206,8 @@ class MedSAM2Tracking:
                 GlobalHydra.instance().clear()
 
             # Path to custom config
-            config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(script_dir, "configs") # Directory where the config files are saved
 
             print(f"[INFO] Loading MedSAM2 from checkpoint: {self.medsam2_model_path}")
             print(f"[INFO] Using config file: {self.config_name}")
@@ -186,15 +257,15 @@ class MedSAM2Tracking:
 
         # Check if we have the video predictor loaded
         if not hasattr(self, "medsam2_predictor") or self.medsam2_predictor is None:
-            print("[INFO] MedSAM2 predictor not loaded, attempting to load...")
+            # print("[INFO] MedSAM2 predictor not loaded, attempting to load...")
             self.load_medsam2_model()
-            
+
+        predictor = self.medsam2_predictor
+
         # Verify predictor is loaded after attempt
         if self.medsam2_predictor is None:
             print("[ERROR] Failed to load MedSAM2 predictor. Cannot proceed with tracking.")
             return
-            
-        predictor = self.medsam2_predictor
 
         # Initialize video sequence - use VideoFrameExtractor for correct frame paths
         video_folder = os.path.join(self.selected_image_folder, self.gui.patient_id, self.gui.selected_exam)
@@ -210,15 +281,15 @@ class MedSAM2Tracking:
             
             resize_h, resize_w = self.image_size
 
-            print(f"[INFO] Initializing MedSAM2 video predictor for temp video path: {temp_video_dir}")
-            print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
-            print(f"[DEBUG] Number of frames: {len(current_frames)}")
-            print(f"[DEBUG] Current frame index: {current_frame_index}")
+            # print(f"[INFO] Initializing MedSAM2 video predictor for temp video path: {temp_video_dir}")
+            # print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
+            # print(f"[DEBUG] Number of frames: {len(current_frames)}")
+            # print(f"[DEBUG] Current frame index: {current_frame_index}")
             
             try:
-                print("[DEBUG] Calling predictor.init_state()...")
+                # print("[DEBUG] Calling predictor.init_state()...")
                 self.inference_state = predictor.init_state(video_path=temp_video_dir)
-                print("[DEBUG] init_state() completed successfully")
+                # print("[DEBUG] init_state() completed successfully")
             except Exception as e:
                 print(f"[ERROR] Failed to initialize inference state: {e}")
                 self._cleanup_temp_directory(temp_video_dir)
@@ -227,6 +298,7 @@ class MedSAM2Tracking:
             # Check if Polygon or Bounding Box
             selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
             is_polygon = "Polygon" in selected_text
+
 
             # ===== POLYGON TRACKING =====
             if is_polygon:
@@ -266,9 +338,9 @@ class MedSAM2Tracking:
                         centroid_x = int(np.mean(scaled_points[:, 0]))
                         centroid_y = int(np.mean(scaled_points[:, 1]))
                         
-                        print(f"[DEBUG] Original polygon centroid: ({np.mean(points_array[:, 0])}, {np.mean(points_array[:, 1])})")
-                        print(f"[DEBUG] Scaled polygon centroid: ({centroid_x}, {centroid_y})")
-                        print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
+                        # print(f"[DEBUG] Original polygon centroid: ({np.mean(points_array[:, 0])}, {np.mean(points_array[:, 1])})")
+                        # print(f"[DEBUG] Scaled polygon centroid: ({centroid_x}, {centroid_y})")
+                        # print(f"[DEBUG] Scale factors: scale_x={scale_x}, scale_y={scale_y}")
                     else:
                         centroid_x = int(np.mean(points_array[:, 0]))
                         centroid_y = int(np.mean(points_array[:, 1]))
@@ -278,7 +350,7 @@ class MedSAM2Tracking:
                     points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
                     labels = np.array([1], np.int32)  # Positive click
                     
-                    print(f"[DEBUG] Adding points for polygon tracking: points={points}, labels={labels}, obj_id={ann_obj_id}")
+                    # print(f"[DEBUG] Adding points for polygon tracking: points={points}, labels={labels}, obj_id={ann_obj_id}")
                     try:
                         _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
                             inference_state=self.inference_state,
@@ -287,7 +359,7 @@ class MedSAM2Tracking:
                             points=points,
                             labels=labels,
                         )
-                        print(f"[DEBUG] add_new_points_or_box completed successfully for polygon")
+                        # print(f"[DEBUG] add_new_points_or_box completed successfully for polygon")
                     except Exception as e:
                         print(f"[ERROR] Failed to add points for polygon tracking: {e}")
                         self._cleanup_temp_directory(temp_video_dir)
@@ -372,8 +444,8 @@ class MedSAM2Tracking:
                 frame_count = 0
                 for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.inference_state):
                     frame_count += 1
-                    if frame_count % 10 == 0:  # Progress indicator every 10 frames
-                        print(f"[DEBUG] Processed {frame_count} frames...")
+                    #if frame_count % 10 == 0:  # Progress indicator every 10 frames
+                        #print(f"[DEBUG] Processed {frame_count} frames...")
                     
                     video_segments[out_frame_idx] = {
                         out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
@@ -520,14 +592,14 @@ class MedSAM2Tracking:
 
     def _get_frame_path(self, video_folder, frame_filename):
         """
-        Verwendet VideoFrameExtractor um den korrekten Pfad zu einem Frame zu bekommen.
+        Uses VideoFrameExtractor to obtain the correct path to a frame.
         
         Args:
-            video_folder (str): Basis-Ordner für Videos/Frames
-            frame_filename (str): Name der Frame-Datei
+            video_folder (str): Base folder for videos/frames
+            frame_filename (str): Name of the frame file
             
         Returns:
-            str: Vollständiger Pfad zum Frame
+            str: Full path to the frame
         """
         if hasattr(self.gui, 'video_frame_extractor'):
             return self.gui.video_frame_extractor.get_frame_path(
@@ -538,16 +610,15 @@ class MedSAM2Tracking:
                 image_folder=video_folder
             )
         else:
-            # Fallback auf alte Methode
+            # Fallback on old method if extractor is not available
             return os.path.join(video_folder, frame_filename)
 
     def _create_temp_video_directory_with_extractor(self, video_folder, current_frames):
         """
-        Erstellt ein temporäres Verzeichnis mit Symlinks zu Video-Frames unter Verwendung des VideoFrameExtractors.
-        MedSAM2 erwartet Frames mit Namen wie 00000.jpg, 00001.jpg, etc.
+        Creates a temporary directory with symlinks to video frames using the VideoFrameExtractor.
+        MedSAM2 expects frames to be named like 00000.jpg, 00001.jpg, etc.
         """
         import tempfile
-        import shutil
         
         # Create temporary directory
         temp_dir = tempfile.mkdtemp(prefix="medsam2_video_")
