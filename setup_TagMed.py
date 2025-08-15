@@ -222,8 +222,8 @@ def run_command(cmd, description=""):
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
         return result.stdout
     except subprocess.CalledProcessError as e:
-        print(f"  ❌ Error: {e.stderr}")
-        print(f"  ❌ Command failed with return code: {e.returncode}")
+        print(f"    \nError: {e.stderr}")
+        print(f"    Command failed with return code: {e.returncode}")
         sys.exit(1)
 
 
@@ -242,38 +242,38 @@ def check_system_requirements():
     # Check Python version
     python_version = sys.version_info
     if python_version.major < 3 or (python_version.major == 3 and python_version.minor < 8):
-        print(f"❌ Error: Python 3.8+ required (found {python_version.major}.{python_version.minor})")
+        print(f"Error: Python 3.8+ required (found {python_version.major}.{python_version.minor})")
         sys.exit(1)
-    print(f"✅ Python {python_version.major}.{python_version.minor}.{python_version.micro}")
+    print(f"Python {python_version.major}.{python_version.minor}.{python_version.micro}")
     
     # Check available disk space
     try:
         free_space = shutil.disk_usage('.').free / (1024**3)  # Convert to GB
         if free_space < 10:
-            print(f"⚠️  Warning: Low disk space ({free_space:.1f}GB). Recommend 10GB+ for models")
+            print(f"  Warning: Low disk space ({free_space:.1f}GB). Recommend 10GB+ for models")
         else:
-            print(f"✅ Disk space: {free_space:.1f}GB available")
+            print(f" Disk space: {free_space:.1f}GB available")
     except Exception:
-        print("⚠️  Could not check disk space")
+        print("  Could not check disk space")
     
     # Check internet connectivity
     try:
         urllib.request.urlopen('https://pypi.org', timeout=10)
-        print("✅ Internet connectivity verified")
+        print(" Internet connectivity verified")
     except Exception:
-        print("⚠️  Warning: Internet connectivity check failed")
+        print("  Warning: Internet connectivity check failed")
     
     # Platform-specific checks
     system = platform.system().lower()
-    print(f"✅ Platform: {platform.system()} {platform.release()}")
+    print(f" Platform: {platform.system()} {platform.release()}")
     
     if system == "linux":
         # Check for common missing packages on Linux
-        print("ℹ️  Note: On Linux, you may need to install: python3-tk python3-dev build-essential")
+        print("  Note: On Linux, you may need to install: python3-tk python3-dev build-essential")
     elif system == "darwin":  # macOS
-        print("ℹ️  Note: On macOS, ensure Xcode Command Line Tools are installed")
+        print("  Note: On macOS, ensure Xcode Command Line Tools are installed")
     elif system == "windows":
-        print("ℹ️  Note: On Windows, ensure Microsoft Visual C++ 14.0+ is available")
+        print("  Note: On Windows, ensure Microsoft Visual C++ 14.0+ is available")
 
 
 def create_virtual_environment(python_cmd):
@@ -286,11 +286,11 @@ def create_virtual_environment(python_cmd):
     env_dir = "tagmed-env"
     
     if not os.path.exists(env_dir):
-        print(f"\n📦 [1/7] Creating virtual environment...")
+        print(f"\n [1/7] Creating virtual environment...")
         run_command(f"{python_cmd} -m venv {env_dir}", "Creating virtual environment")
-        print(f"✅ Virtual environment created at: {env_dir}")
+        print(f" Virtual environment created at: {env_dir}")
     else:
-        print(f"\n📦 [1/7] Virtual environment already exists at: {env_dir}")
+        print(f"\n [1/7] Virtual environment already exists at: {env_dir}")
 
 
 def upgrade_pip_and_tools(env_pip):
@@ -300,13 +300,13 @@ def upgrade_pip_and_tools(env_pip):
     Args:
         env_pip (str): Path to pip executable in virtual environment
     """
-    print(f"\n🔧 [2/7] Upgrading pip and installing build tools...")
+    print(f"\n [2/7] Upgrading pip and installing build tools...")
     
     essential_tools = ["pip", "wheel", "setuptools"]
     for tool in essential_tools:
         run_command(f"{env_pip} install --upgrade {tool}", f"Upgrading {tool}")
     
-    print("✅ Build tools updated")
+    print(" Build tools updated")
 
 
 def install_core_packages(env_pip):
@@ -316,7 +316,7 @@ def install_core_packages(env_pip):
     Args:
         env_pip (str): Path to pip executable in virtual environment
     """
-    print(f"\n🐍 [3/7] Installing core Python packages...")
+    print(f"\n [3/7] Installing core Python packages...")
     
     core_packages = [
         "torch torchvision torchaudio",  # PyTorch ecosystem
@@ -336,7 +336,7 @@ def install_core_packages(env_pip):
         package_name = package.split()[0]  # Get first word for display
         run_command(f"{env_pip} install {package}", f"Installing {package_name}")
     
-    print("✅ Core packages installed")
+    print(" Core packages installed")
 
 
 def install_sam_packages(env_pip):
@@ -346,7 +346,7 @@ def install_sam_packages(env_pip):
     Args:
         env_pip (str): Path to pip executable in virtual environment
     """
-    print(f"\n🤖 [4/7] Installing SAM and MedSAM packages...")
+    print(f"\n [4/7] Installing SAM and MedSAM packages...")
     
     sam_packages = [
         ("segment-anything", "Original SAM"),
@@ -357,12 +357,12 @@ def install_sam_packages(env_pip):
         try:
             run_command(f"{env_pip} install {package}", f"Installing {description}")
         except SystemExit:
-            print(f"⚠️  Warning: Could not install {package} from PyPI")
+            print(f"  Warning: Could not install {package} from PyPI")
             print(f"   You may need to install it manually from GitHub")
             # Don't exit, continue with other packages
             pass
     
-    print("✅ SAM packages installation attempted")
+    print(" SAM packages installation attempted")
 
 
 def verify_gui_dependencies(env_python):
@@ -377,15 +377,15 @@ def verify_gui_dependencies(env_python):
     try:
         run_command(f"{env_python} -c \"import tkinter; print('tkinter available')\"", 
                    "Checking tkinter availability")
-        print("✅ tkinter is available")
+        print(" tkinter is available")
     except SystemExit:
         system = platform.system().lower()
         if system == "linux":
-            print("❌ tkinter not available. Install with: sudo apt-get install python3-tk")
+            print(" tkinter not available. Install with: sudo apt-get install python3-tk")
         elif system == "darwin":
-            print("❌ tkinter not available. Install Python from python.org or use Homebrew")
+            print(" tkinter not available. Install Python from python.org or use Homebrew")
         elif system == "windows":
-            print("❌ tkinter not available. Reinstall Python with tkinter support")
+            print(" tkinter not available. Reinstall Python with tkinter support")
         sys.exit(1)
 
 
@@ -393,7 +393,7 @@ def create_project_structure():
     """
     Create necessary project directories.
     """
-    print(f"\n📁 [6/7] Creating project structure...")
+    print(f"\n [6/7] Creating project structure...")
     
     directories = [
         "models",          # For SAM/MedSAM model storage
@@ -406,11 +406,11 @@ def create_project_structure():
     for directory in directories:
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
-            print(f"  📂 Created directory: {directory}")
+            print(f"   Created directory: {directory}")
         else:
-            print(f"  📂 Directory exists: {directory}")
+            print(f"   Directory exists: {directory}")
     
-    print("✅ Project structure created")
+    print(" Project structure created")
 
 
 def finalize_setup(system, activate_script):
@@ -421,7 +421,7 @@ def finalize_setup(system, activate_script):
         system (str): Operating system name
         activate_script (str): Path to activation script
     """
-    print(f"\n🎯 [7/7] Finalizing setup...")
+    print(f"\n [7/7] Finalizing setup...")
     
     # Create a startup script for convenience
     if system == "windows":
@@ -432,7 +432,7 @@ def finalize_setup(system, activate_script):
             f.write("cd src\n")
             f.write("python main.py\n")
             f.write("pause\n")
-        print(f"  📜 Created startup script: {startup_script}")
+        print(f"   Created startup script: {startup_script}")
     else:
         startup_script = "start_tagmed.sh"
         with open(startup_script, 'w') as f:
@@ -441,9 +441,9 @@ def finalize_setup(system, activate_script):
             f.write("cd src\n")
             f.write("python main.py\n")
         os.chmod(startup_script, 0o755)  # Make executable
-        print(f"  📜 Created startup script: {startup_script}")
+        print(f"   Created startup script: {startup_script}")
     
-    print("✅ Setup finalized")
+    print(" Setup finalized")
 
 
 def main_setup():
@@ -451,7 +451,7 @@ def main_setup():
     Main setup function coordinating the entire installation process.
     """
     print("=" * 70)
-    print("🏥 TagMed Setup Script - Medical Annotation Tool")
+    print("TagMed Setup Script - Medical Annotation Tool")
     print("=" * 70)
     
     # Detect platform and get configuration
@@ -471,10 +471,10 @@ def main_setup():
     
     # Display completion message
     print("\n" + "=" * 70)
-    print("🎉 SETUP COMPLETE!")
+    print("SETUP COMPLETE!")
     print("=" * 70)
     
-    print("\n🚀 To start using TagMed:")
+    print("\nTo start using TagMed:")
     if system == "windows":
         print("   Option 1: Double-click start_tagmed.bat")
         print("   Option 2: Manual activation:")
@@ -488,13 +488,13 @@ def main_setup():
         print("     2. cd src")
         print("     3. python main.py")
     
-    print("\n📋 Setup Summary:")
-    print("   ✅ Virtual environment created")
-    print("   ✅ Dependencies installed")
-    print("   ✅ Project structure created")
-    print("   ✅ Startup scripts generated")
+    print("\n Setup Summary:")
+    print("   Virtual environment created")
+    print("   Dependencies installed")
+    print("   Project structure created")
+    print("   Startup scripts generated")
     
-    print("\n📝 Important Notes:")
+    print("\n Important Notes:")
     print("   • SAM2 models (~2-5GB) will download automatically on first use")
     print("   • MedSAM2 models will download automatically when selected")
     print("   • Configure your data directory in the application settings")
@@ -512,10 +512,10 @@ if __name__ == "__main__":
     try:
         main_setup()
     except KeyboardInterrupt:
-        print("\n\n⚠️  Setup interrupted by user (Ctrl+C)")
+        print("\n\n  Setup interrupted by user (Ctrl+C)")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Unexpected error during setup: {e}")
+        print(f"\n\n Unexpected error during setup: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
