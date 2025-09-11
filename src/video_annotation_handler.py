@@ -327,6 +327,7 @@ class VideoAnnotationHandler():
                 mask_paths = self._safe_parse_list(self.gui.all_annotations.at[idx, 'masks'])
                 if index < len(mask_paths):
                     path_to_remove = mask_paths[index]
+                    print(f"[DEBUG] Deleting mask at path: {path_to_remove}")
                     self.mask_handler.delete_mask(path_to_remove)
 
                 # Remove data from all bounding box-related columns

@@ -21,6 +21,7 @@ import pandas as pd
 import cv2
 from pathlib import Path
 from tkinter import messagebox
+import ast
 
 from config_handler import ConfigHandler
 
@@ -418,6 +419,7 @@ class AnnotationLoader():
         config = ConfigHandler()
         config.set("selected_anno_table_file", default_path)
         config.save()
+    
 
 
 

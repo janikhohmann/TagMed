@@ -21,8 +21,6 @@ import os
 from PIL import Image, ImageTk
 
 
-
-
 class MaskHandler:
     def __init__(self, gui):
         self.gui = gui
