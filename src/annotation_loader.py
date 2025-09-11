@@ -80,11 +80,21 @@ class AnnotationLoader():
         for root, dirs, files in os.walk(path):
             exams += len(dirs)
             total_files += len(files)
+
+            # Include frames from videos in the count
+            for file_path in files:
+                if self._is_video_file(file_path): # check if it's a video file
+                    video_base_name = os.path.splitext(file_path)[0]
+                    if not self._video_already_framed(video_base_name, root): # check if already framed
+                        video_path = os.path.join(root, file_path)
+                        frames = self._get_video_frame_count(video_path, frame_interval=1) # count all frames
+                        total_files += frames
+                    
         return exams, total_files
     
     def get_exams(self, patient_id):
         """
-        Retrieve folder names (exams) inside a patient's directory.
+        Retrieve folder names (exams) inside a patient's directory. 
         
         Scans the patient folder for subdirectories representing
         different medical examinations or study sessions.

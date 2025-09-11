@@ -237,7 +237,7 @@ def check_system_requirements():
     - Internet connectivity
     - Required system packages
     """
-    print("🔍 Checking system requirements...")
+    print(" Checking system requirements...")
     
     # Check Python version
     python_version = sys.version_info
@@ -372,7 +372,7 @@ def verify_gui_dependencies(env_python):
     Args:
         env_python (str): Path to python executable in virtual environment
     """
-    print(f"\n🖥️  [5/7] Verifying GUI dependencies...")
+    print(f"\n  [5/7] Verifying GUI dependencies...")
     
     try:
         run_command(f"{env_python} -c \"import tkinter; print('tkinter available')\"", 
@@ -466,7 +466,7 @@ def main_setup():
     install_core_packages(env_pip)
     install_sam_packages(env_pip)
     verify_gui_dependencies(env_python)
-    #create_project_structure()
+    create_project_structure()
     finalize_setup(system, activate_script)
     
     # Display completion message
