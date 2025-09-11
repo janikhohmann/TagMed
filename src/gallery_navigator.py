@@ -68,13 +68,9 @@ class GalleryNavigator:
         """
         self.root = root
 
-        # Load configuration settings
+        # Load configuration settings (immer frisch laden)
         config = ConfigHandler()
-        self.selected_image_folder = config.get("selected_image_folder")
-        self.selected_anno_table_file = config.get("selected_anno_table_file")
-        self.selected_medical_report_file = config.get("selected_medical_report_file")
-        self.class_list = config.get("class_list")
-        self.image_size = config.get("image_size", (600, 600))  # Default image size if not set
+        self.refresh_configuration()
 
         # Initialize data management components
         self.annotation_loader = AnnotationLoader()
@@ -109,6 +105,23 @@ class GalleryNavigator:
 
         self.selected_image_index = None
 
+    def refresh_configuration(self):
+        """
+        Loads the latest configuration settings.
+        """
+        config = ConfigHandler()
+        self.selected_image_folder = config.get("selected_image_folder")
+        self.selected_anno_table_file = config.get("selected_anno_table_file")
+        self.selected_medical_report_file = config.get("selected_medical_report_file")
+        self.class_list = config.get("class_list")
+        self.image_size = config.get("image_size", (600, 600))
+        
+        # reinitialize components that depend on configuration
+        self.annotation_loader = AnnotationLoader()
+        self.all_annotations = self.annotation_loader.load_annotations_in_internal_list()
+        self.data_loader = DataLoader()
+        self.medical_record_loader = MedicalRecordLoader()
+
 
 
     def open_patient_window(self, patient_id):
@@ -122,6 +135,9 @@ class GalleryNavigator:
         Args:
             patient_id (str): Unique identifier for the patient
         """ 
+
+        # refresh configuration before opening the window
+        self.refresh_configuration()
 
         # Creating a new window
         patient_window = tk.Toplevel(self.root)

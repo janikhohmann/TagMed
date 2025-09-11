@@ -15,7 +15,7 @@ Author: Janik Hohmann
 Institution: University Hospital Düsseldorf
 """
 
-import tkinter as tk 
+import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, Text
 
 from config_handler import ConfigHandler
@@ -297,7 +297,16 @@ class AnnotationTool:
         if folder_path:
             self.selected_image_folder = folder_path
             self.config.set("selected_image_folder", folder_path)
-            print(f"[INFO] File directory: {folder_path}")
+            self.config.save()  # Sofort speichern
+            
+            # Annotation Loader mit neuem Pfad aktualisieren
+            self.annotation_loader = AnnotationLoader()
+            
+            # Automatisch Daten neu laden
+            self.populate_tree()
+            
+            print(f"[INFO] File directory updated: {folder_path}")
+            messagebox.showinfo("Success", f"Image folder updated to:\n{folder_path}\n\nData refreshed automatically.")
 
     def select_medical_reports(self):
         """
@@ -313,7 +322,10 @@ class AnnotationTool:
         if medical_report_file:
             self.selected_medical_report_file = medical_report_file
             self.config.set("selected_medical_report_file", medical_report_file)
-            print(f"[INFO] Medical Reports: {medical_report_file}")
+            self.config.save()  # Sofort speichern
+            
+            print(f"[INFO] Medical Reports updated: {medical_report_file}")
+            messagebox.showinfo("Success", f"Medical reports file updated to:\n{medical_report_file}")
 
     def select_anno_table(self):
         """
@@ -329,11 +341,23 @@ class AnnotationTool:
         if anno_table_file:
             self.selected_anno_table_file = anno_table_file
             self.config.set("selected_anno_table_file", anno_table_file)
-            print(f"[INFO] Annotation Database: {anno_table_file}")
+            self.config.save()  # Sofort speichern
+            
+            # Annotation Loader mit neuer Datenbank aktualisieren
+            self.annotation_loader = AnnotationLoader()
+            
+            # Automatisch Daten neu laden
+            self.populate_tree()
+            
+            print(f"[INFO] Annotation Database updated: {anno_table_file}")
+            messagebox.showinfo("Success", f"Annotation database updated to:\n{anno_table_file}\n\nData refreshed automatically.")
         else:
             # automatic creation of a new annotation table --> [TBD]should also be done when starting without one
             messagebox.showinfo("Info", "If you do not select a file, a new file will be created for you.")
             self.annotation_loader.create_default_anno_table()
+            
+            # Nach Erstellung der neuen Tabelle, Daten neu laden
+            self.populate_tree()
 
 
 
@@ -386,7 +410,12 @@ class AnnotationTool:
 
         def on_close_class_window():
             """Speichert die Klassenliste beim Schließen des Fensters."""
+            # Konfiguration speichern
+            self.config.set("class_list", self.class_list)
+            self.config.save()
+            
             print(f"[INFO] Following classes selected: {self.class_list}")
+            messagebox.showinfo("Success", f"Class list updated!\nClasses: {', '.join(self.class_list) if self.class_list else 'None'}")
             class_window.destroy()
 
         # === BUTTONS ===
