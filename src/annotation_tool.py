@@ -17,6 +17,7 @@ Institution: University Hospital Düsseldorf
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, Text
+import pandas as pd
 
 from config_handler import ConfigHandler
 from annotation_loader import AnnotationLoader
@@ -181,7 +182,15 @@ class AnnotationTool:
         # === LOAD PATIENT DATA ===
         all_patients = self.annotation_loader.available_patients()
         total = len(all_patients)
-        print(all_patients)
+        # print(all_patients)
+
+        # ==== READ ANNOTATION TABLE AND CHECK IF IT EXISTS ===
+        try:
+            anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
+        except FileNotFoundError:
+            print(f"[ERROR] Annotation table file not found: {self.selected_anno_table_file}")
+            messagebox.showinfo("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}\n\nPlease check the file path or create a new one.")
+
 
         # === PROCESS EACH PATIENT ===
         for i, patient_id in enumerate(all_patients, 1):
@@ -297,12 +306,12 @@ class AnnotationTool:
         if folder_path:
             self.selected_image_folder = folder_path
             self.config.set("selected_image_folder", folder_path)
-            self.config.save()  # Sofort speichern
-            
-            # Annotation Loader mit neuem Pfad aktualisieren
+            self.config.save()  # save immediately
+
+            # Update Annotation Loader with new path
             self.annotation_loader = AnnotationLoader()
-            
-            # Automatisch Daten neu laden
+
+            # Automatically reload data
             self.populate_tree()
             
             print(f"[INFO] File directory updated: {folder_path}")
@@ -322,7 +331,7 @@ class AnnotationTool:
         if medical_report_file:
             self.selected_medical_report_file = medical_report_file
             self.config.set("selected_medical_report_file", medical_report_file)
-            self.config.save()  # Sofort speichern
+            self.config.save()  # save immediately
             
             print(f"[INFO] Medical Reports updated: {medical_report_file}")
             messagebox.showinfo("Success", f"Medical reports file updated to:\n{medical_report_file}")
@@ -355,8 +364,8 @@ class AnnotationTool:
             # automatic creation of a new annotation table --> [TBD]should also be done when starting without one
             messagebox.showinfo("Info", "If you do not select a file, a new file will be created for you.")
             self.annotation_loader.create_default_anno_table()
-            
-            # Nach Erstellung der neuen Tabelle, Daten neu laden
+
+            # load data after creating the new table
             self.populate_tree()
 
 
@@ -393,7 +402,7 @@ class AnnotationTool:
         entry.pack(padx=10)
 
         def add_class():
-            """Fügt eine neue Klasse zur Liste hinzu."""
+            """Adds a new class to the list."""
             new_class = entry.get().strip()
             if new_class and new_class not in self.class_list:
                 self.class_list.append(new_class)
@@ -401,7 +410,7 @@ class AnnotationTool:
                 entry.delete(0, tk.END)
 
         def delete_class():
-            """Löscht die ausgewählte Klasse aus der Liste."""
+            """Deletes the selected class from the list."""
             selection = listbox.curselection()
             if selection:
                 index = selection[0]
@@ -409,8 +418,9 @@ class AnnotationTool:
                 update_listbox()
 
         def on_close_class_window():
-            """Speichert die Klassenliste beim Schließen des Fensters."""
-            # Konfiguration speichern
+
+            """Saves the class list when closing the window."""
+            # Save configuration
             self.config.set("class_list", self.class_list)
             self.config.save()
             

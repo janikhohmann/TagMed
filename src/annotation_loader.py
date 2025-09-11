@@ -135,8 +135,6 @@ class AnnotationLoader():
                 )
             ]
         except FileNotFoundError:
-            print(f"[ERROR] Annotation table file not found: {self.selected_anno_table_file}")
-            messagebox.showinfo("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}")
             return 0
         return len(filtered)
     
