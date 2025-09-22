@@ -143,7 +143,14 @@ class ImgAnnotationHandler:
         if img_annotation_type == "Bounding Box":
             # Validate annotation type compatibility - prevent mixing BB and polygon annotations
             polygon_value = self.gui.all_annotations.at[idx, "polygon"]
-            if pd.notna(polygon_value):  # Check if polygon annotations already exist
+            # Check if polygon annotations already exist (handle lists and single values)
+            has_polygon = False
+            if isinstance(polygon_value, list) and len(polygon_value) > 0:
+                has_polygon = True
+            elif not isinstance(polygon_value, list) and pd.notna(polygon_value):
+                has_polygon = True
+            
+            if has_polygon:
                 self.gui.wrong_annotation_warning_gui("Bounding Box")
                 self.delete_all_bounding_boxes()
                 return
