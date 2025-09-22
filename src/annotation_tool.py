@@ -18,6 +18,7 @@ Institution: University Hospital Düsseldorf
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, Text
 import pandas as pd
+import os
 
 from config_handler import ConfigHandler
 from annotation_loader import AnnotationLoader
@@ -64,6 +65,7 @@ class AnnotationTool:
         self.menubar.add_cascade(label="File", menu=self.filemenu)
         self.filemenu.add_command(label="Add Image Folder", command=self.select_image_folder)
         self.filemenu.add_command(label="Add Annotation Database", command=self.select_anno_table)
+        self.filemenu.add_command(label="Create Default Annotation Database", command=self.link_create_default_anno_table)
         self.filemenu.add_command(label="Add Medical Reports", command=self.select_medical_reports)
         self.filemenu.add_command(label="Manage Classes", command=self.open_class_manager)
         self.filemenu.add_command(label="Close", command=exit)
@@ -188,9 +190,12 @@ class AnnotationTool:
         try:
             anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
         except FileNotFoundError:
-            print(f"[ERROR] Annotation table file not found: {self.selected_anno_table_file}")
-            messagebox.showinfo("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}\n\nPlease check the file path or create a new one.")
-
+            #print(f"[ERROR] Annotation table file not found: {self.selected_anno_table_file}")
+            #messagebox.showinfo("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}\n\nPlease check the file path or create a new one.")
+            if messagebox.askokcancel("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}\n\nShould a new annotation table created with default values."):
+                # Create a new annotation table with default values
+                self.link_create_default_anno_table()
+            return
 
         # === PROCESS EACH PATIENT ===
         for i, patient_id in enumerate(all_patients, 1):
@@ -291,6 +296,20 @@ class AnnotationTool:
             patient_id = self.tree.item(item, "values")[0]
             self.patient_id = patient_id
 
+            # check if annotation table exists
+            try:
+                _ = pd.read_csv(self.selected_anno_table_file, sep=";")
+            except FileNotFoundError:
+                #print(f"[ERROR] Annotation table file not found: {self.selected_anno_table_file}")
+                messagebox.showinfo("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}\n\nPlease check the file path or create a new one.")
+                return
+            
+            # check if image folder is set
+            if not self.selected_image_folder or not os.path.exists(self.selected_image_folder):
+                #print(f"[ERROR] No image folder selected.")
+                messagebox.showinfo("ERROR", f"No image folder selected.\n\nPlease select an image folder in the File menu.")
+                return
+
             # Open Gallery Navigator for detailed annotation
             navigator = GalleryNavigator(self.root)
             navigator.open_patient_window(patient_id)
@@ -350,12 +369,12 @@ class AnnotationTool:
         if anno_table_file:
             self.selected_anno_table_file = anno_table_file
             self.config.set("selected_anno_table_file", anno_table_file)
-            self.config.save()  # Sofort speichern
-            
-            # Annotation Loader mit neuer Datenbank aktualisieren
+            self.config.save()  # save immediately
+
+            # Update Annotation Loader with new database
             self.annotation_loader = AnnotationLoader()
-            
-            # Automatisch Daten neu laden
+
+            # Automatically reload data
             self.populate_tree()
             
             print(f"[INFO] Annotation Database updated: {anno_table_file}")
@@ -501,7 +520,7 @@ class AnnotationTool:
         text_box.tag_config("normal", font=("Arial", 10))
 
         # === INSERT IMPRINT TEXT ===
-        text_box.insert("end", "Imprint:\n\n", "title")
+        text_box.insert("end", "\n", "title")
         text_box.insert("end", "M.Sc., Janik Hohmann\n", "normal")
         text_box.insert("end", "Clinic for Gastroenterology, Hepatology and Infectiology\n", "normal")
         text_box.insert("end", "Director: Prof. Dr. med. Tom Lüdde\n\n", "normal")
@@ -520,3 +539,20 @@ class AnnotationTool:
         # Close button
         button_close = tk.Button(imprint_window, text="Close", command=imprint_window.destroy)
         button_close.pack(pady=10)
+
+    def link_create_default_anno_table(self):
+        """
+        Links to the create_default_anno_table function of the AnnotationLoader.
+
+        Creates a new annotation table with default values.
+        """
+        if messagebox.askokcancel("Warning", "A new annotation table will be created with default values. If you already have an auto-generated annotation table, it will be overwritten.\n\nDo you want to proceed?"):
+            anno_table_file = self.annotation_loader.create_default_anno_table()
+            self.populate_tree()  # reload data after creating the new table
+            self.config.set("selected_anno_table_file", anno_table_file)
+            self.config.save()  # save immediately
+
+            # Update Annotation Loader with new database
+            self.annotation_loader = AnnotationLoader()
+
+            messagebox.showinfo("Info", "A new annotation table is created.")

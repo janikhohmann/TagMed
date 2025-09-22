@@ -306,9 +306,12 @@ class AnnotationLoader():
         - Default "NN" values for empty annotations
         """
         image_folder = self.selected_image_folder
+        # check if image folder is set
         if not image_folder or not os.path.exists(image_folder):
-            print("No valid image folder set - no annotation table created.")
+            #print(f"[ERROR] No image folder selected.")
+            messagebox.showinfo("ERROR", f"No valid image folder selected.\n\nPlease select an image folder in the File menu.")
             return
+
 
         entries = []
         frame_interval = 1  # Extract every frame (configurable)
@@ -403,7 +406,7 @@ class AnnotationLoader():
                         print(f"[WARNING] No frames extractable for video '{file}'")
 
         df = pd.DataFrame(entries)
-        default_path = os.path.join("auto_generated_anno_table.csv")
+        default_path = os.path.join("..", "auto_generated_anno_table.csv")
         df.to_csv(default_path, sep=";", index=False)
         
         total_entries = len(entries)
@@ -417,6 +420,8 @@ class AnnotationLoader():
         config = ConfigHandler()
         config.set("selected_anno_table_file", default_path)
         config.save()
+
+        return default_path
     
 
 
