@@ -3,6 +3,7 @@ import pandas as pd
 import statistics as stat
 import os
 import ast
+from tkinter import  ttk, messagebox
 
 from annotation_loader import AnnotationLoader
 from image_mask_predictor import ImageMaskPredictor
@@ -846,8 +847,15 @@ class ImgAnnotationHandler:
         selection = self.gui.img_annotation_listbox.curselection()
         if not selection:
             print("Modify Error: No annotation selected in the listbox.")
-            return
+            messagebox.showwarning("Modify Error", "No annotation selected to modify.", parent=self.gui.patient_window)
 
+            # Automatically turn off modify mode and update toggle button
+            self.gui.modify_mode.set(False)
+            if hasattr(self.gui, 'gallery_navigator') and hasattr(self.gui.gallery_navigator, 'modify_toggle_button'):
+                self.gui.gallery_navigator.modify_toggle_button.config(text="Modify: Off")
+            
+            return
+        
         listbox_index = selection[0]
         self.listbox_index = listbox_index
 

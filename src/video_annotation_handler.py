@@ -4,6 +4,7 @@ import ast
 import tkinter as tk 
 from PIL import Image, ImageTk
 import statistics as stat
+from tkinter import  ttk, messagebox
 
 from annotation_loader import AnnotationLoader
 from config_handler import ConfigHandler 
@@ -862,6 +863,13 @@ class VideoAnnotationHandler():
         selection = self.gui.video_annotation_listbox.curselection()
         if not selection:
             print("Modify Error: No annotation selected in the listbox.")
+            messagebox.showwarning("Modify Error", "No annotation selected to modify.", parent=self.gui.patient_window)
+
+            # Automatically turn off modify mode and update toggle button
+            self.gui.modify_mode.set(False)
+            if hasattr(self.gui, 'gallery_navigator') and hasattr(self.gui.gallery_navigator, 'modify_toggle_button'):
+                self.gui.gallery_navigator.modify_toggle_button.config(text="Modify: Off")
+            
             return
 
         listbox_index = selection[0]
