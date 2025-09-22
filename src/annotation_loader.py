@@ -90,6 +90,7 @@ class AnnotationLoader():
                         video_path = os.path.join(root, file_path)
                         frames = self._get_video_frame_count(video_path, frame_interval=1) # count all frames
                         total_files += frames
+                        total_files -= 1 # subtract the original video file
                     
         return exams, total_files
     
