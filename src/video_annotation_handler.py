@@ -120,12 +120,14 @@ class VideoAnnotationHandler():
             print("[ERROR] 'img_ID' column not found in DataFrame.")
             return
 
+
         # Search for existing row matching current frame ID
         match = self.gui.all_annotations['img_ID'].astype(str).str.strip() == str(image_id).strip()
         if not match.any():
             print(f"[ERROR] No entry found in annotation_df for img_ID '{image_id}'")
             return
         idx = self.gui.all_annotations[match].index[0]  # Get DataFrame row index
+
 
         # Helper function for managing list-based annotation data
         def append_or_init_list(cell, value):
@@ -151,19 +153,25 @@ class VideoAnnotationHandler():
                 return [value]
             if isinstance(cell, list):
                 return cell + [value]
-            try:
-                parsed = ast.literal_eval(cell)
-                if isinstance(parsed, list):
-                    return parsed + [value]
-            except:
-                pass
+            # Handle single float/int values that were previously stored as lists
+            if isinstance(cell, (int, float)) and not pd.isna(cell):
+                return [cell, value]  # Convert single value to list and append new value
+            if isinstance(cell, str):
+                try:
+                    parsed = ast.literal_eval(cell)
+                    if isinstance(parsed, list):
+                        return parsed + [value]
+                except:
+                    # If parsing fails, treat as single string value
+                    return [cell, value]
             return [value]
 
 
         # === Bounding Box Annotation Processing ===
         if img_annotation_type == "Bounding Box":
             # Validate annotation type compatibility - prevent mixing BB and polygon annotations
-            if self.gui.all_annotations.at[idx, "polygon"] != "NN":  # Check if polygon annotations already exist
+            polygon_value = self.gui.all_annotations.at[idx, "polygon"]
+            if pd.notna(polygon_value):  # Check if polygon annotations already exist
                 self.gui.wrong_annotation_warning_gui("Bounding Box")
                 self.delete_all_bounding_boxes()
                 return
@@ -177,8 +185,17 @@ class VideoAnnotationHandler():
 
             # Store bounding box data in annotation DataFrame
             # Updates: x, y, w, h coordinates, class label, and annotation type
+            
+            # Ensure columns can store lists by converting to object dtype
+            for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype']:
+                if col in self.gui.all_annotations.columns:
+                    self.gui.all_annotations[col] = self.gui.all_annotations[col].astype('object')
+            
             for col, val in zip(['x', 'y', 'w', 'h', 'class', 'bb_annotype'], [x, y, w, h, img_selected_class, 'manually']):
-                self.gui.all_annotations.at[idx, col] = append_or_init_list(self.gui.all_annotations.at[idx, col], val)
+                old_value = self.gui.all_annotations.at[idx, col]
+                new_value = append_or_init_list(old_value, val)
+                #print(f"[DEBUG] Column '{col}': {old_value} + {val} -> {new_value}")
+                self.gui.all_annotations.at[idx, col] = new_value
 
             # Register rectangle canvas element for future reference and manipulation
             self.drawn_rect_ids.append(self.rect_id)
@@ -192,7 +209,8 @@ class VideoAnnotationHandler():
         # === Polygon Annotation Processing ===
         elif img_annotation_type == "Polygon":
             # Validate annotation type compatibility - prevent mixing BB and polygon annotations
-            if self.gui.all_annotations.at[idx, "class"] != "NN":  # Check if bounding box annotations already exist
+            class_value = self.gui.all_annotations.at[idx, "class"]
+            if pd.notna(class_value):  # Check if bounding box annotations already exist
                 self.gui.wrong_annotation_warning_gui("Polygon")
                 self.delete_all_polygons()
                 return
@@ -213,6 +231,11 @@ class VideoAnnotationHandler():
 
             # Create deep copy of polygon points to prevent reference issues
             polygon_copy = [point.copy() for point in self.polygon_points]
+            
+            # Ensure columns can store lists by converting to object dtype
+            for col in ['polygon', 'class_polygon', 'polygon_annotype']:
+                if col in self.gui.all_annotations.columns:
+                    self.gui.all_annotations[col] = self.gui.all_annotations[col].astype('object')
             
             # Update DataFrame with polygon annotation data
             self.gui.all_annotations.at[idx, 'polygon'] = append_or_init_list(
@@ -316,11 +339,11 @@ class VideoAnnotationHandler():
                 if index < len(annotype_list):
                     annotype_list.pop(index)
 
-                # Update DataFrame with modified lists (use "NN" if lists become empty)
-                self.gui.all_annotations.at[idx, 'polygon'] = polygons if polygons else "NN"
-                self.gui.all_annotations.at[idx, 'class_polygon'] = class_list if class_list else "NN"
-                self.gui.all_annotations.at[idx, 'polygon_annotype'] = annotype_list if annotype_list else "NN"
-                
+                # Update DataFrame with modified lists (use None if lists become empty)
+                self.gui.all_annotations.at[idx, 'polygon'] = polygons if polygons else None
+                self.gui.all_annotations.at[idx, 'class_polygon'] = class_list if class_list else None
+                self.gui.all_annotations.at[idx, 'polygon_annotype'] = annotype_list if annotype_list else None
+
             # === Bounding Box Annotation Deletion ===
             else:
                 # Delete associated mask before removing annotation data
@@ -336,7 +359,7 @@ class VideoAnnotationHandler():
                     if index < len(val):
                         val.pop(index)
                     # Update DataFrame column with modified list
-                    self.gui.all_annotations.at[idx, col] = val if val else "NN"
+                    self.gui.all_annotations.at[idx, col] = val if val else None
 
             # === Visual Element Cleanup ===
             # Remove visual element from frame canvas (rectangle or polygon)
@@ -1189,15 +1212,15 @@ class VideoAnnotationHandler():
             print(f"[ERROR] Annotation DataFrame is missing necessary columns: {missing_columns}")
             return
 
-        # Normalize annotation data - ensure empty/NaN values are consistently marked as "NN"
+        # Normalize annotation data - ensure empty/NaN values are consistently marked as None
         for col in ['class', 'class_polygon']:
             annotated_df[col] = annotated_df[col].apply(
-                lambda x: "NN" if (not hasattr(x, '__len__') and pd.isna(x)) or (hasattr(x, '__len__') and len(x) == 0) else x
+                lambda x: None if (not hasattr(x, '__len__') and pd.isna(x)) or (hasattr(x, '__len__') and len(x) == 0) else x
             )
         
         # Count annotated frames per video by analyzing frame IDs
         annotated_frame_counts = annotated_df.loc[
-                (annotated_df['class'] != "NN") | (annotated_df['class_polygon'] != "NN"),
+                (pd.notna(annotated_df['class'])) | (pd.notna(annotated_df['class_polygon'])),
                 'img_ID'
             ].astype(str).str.strip()
 

@@ -132,7 +132,7 @@ class AnnotationLoader():
             filtered = anno_table[
                 (anno_table["pat_ID"] == patient_id) &
                 (
-                    (anno_table["class"] != "NN") | (anno_table["class_polygon"] != "NN")
+                    (anno_table["class"].notna() | (anno_table["class_polygon"].notna()))
                 )
             ]
         except FileNotFoundError:
@@ -152,8 +152,9 @@ class AnnotationLoader():
             pd.DataFrame: DataFrame containing all valid annotation entries
         """
         anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
-        # Load all possible annotations, even when they are empty
-        annotated_images = anno_table[anno_table["x"].apply(lambda x: isinstance(x, str))]
+        # Load all possible annotations, including empty ones (None/NaN values)
+        # Return all rows instead of filtering for string values in 'x' column
+        annotated_images = anno_table  # Return all rows, not just those with string x values
 
         return annotated_images
 
@@ -190,7 +191,8 @@ class AnnotationLoader():
 
         except KeyError as e:
             print(e)
-        
+        #print(all_annotated_data)
+
         return all_annotated_data
 
         
@@ -203,7 +205,7 @@ class AnnotationLoader():
         """
         try:
             self.all_annotated_data.to_csv(self.selected_anno_table_file, sep=";", index=False)
-            annotations = self.all_annotated_data["x"] != "NN"
+            annotations = self.all_annotated_data["x"] != None
             print(f"[DEBUG] Saved {len(annotations)} rows to {self.selected_anno_table_file}")
 
         except Exception as e:
@@ -304,7 +306,7 @@ class AnnotationLoader():
         The generated table includes:
         - Image file entries with metadata
         - Video frame entries for trackable content
-        - Default "NN" values for empty annotations
+        - Default None values for empty annotations
         """
         image_folder = self.selected_image_folder
         # check if image folder is set
@@ -322,8 +324,8 @@ class AnnotationLoader():
                 file_path = os.path.join(root, file)
                 rel_path = os.path.relpath(root, image_folder)
                 parts = rel_path.split(os.sep)
-                pat_id = parts[0] if len(parts) > 0 else "NN"
-                exam_id = parts[1].split("_")[-1] if len(parts) > 1 else "NN"
+                pat_id = parts[0] if len(parts) > 0 else None
+                exam_id = parts[1].split("_")[-1] if len(parts) > 1 else None
 
                 # === Image Files ===
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
@@ -340,19 +342,19 @@ class AnnotationLoader():
                         "exam_ID": exam_id,
                         "img_num": img_num,
                         "img_ID": img_id,
-                        "class": "NN",
-                        "x": "NN",
-                        "y": "NN",
-                        "w": "NN",
-                        "h": "NN",
-                        "class_polygon": "NN",
-                        "polygon": "NN",
-                        "exam_mode": "NN",
-                        "organ": "NN",
+                        "class": None,
+                        "x": None,
+                        "y": None,
+                        "w": None,
+                        "h": None,
+                        "class_polygon": None,
+                        "polygon": None,
+                        "exam_mode": None,
+                        "organ": None,
                         "file_type": file_type,
-                        "bb_annotype": "NN",
-                        "polygon_annotype": "NN",
-                        "masks": "NN",
+                        "bb_annotype": None,
+                        "polygon_annotype": None,
+                        "masks": None,
                         "file_path": file_path
                     })
 
@@ -386,19 +388,19 @@ class AnnotationLoader():
                                 "exam_ID": exam_id,
                                 "img_num": base_img_num, 
                                 "img_ID": frame_id,
-                                "class": "NN",
-                                "x": "NN",
-                                "y": "NN",
-                                "w": "NN",
-                                "h": "NN",
-                                "class_polygon": "NN",
-                                "polygon": "NN",
-                                "exam_mode": "NN",
-                                "organ": "NN",
+                                "class": None,
+                                "x": None,
+                                "y": None,
+                                "w": None,
+                                "h": None,
+                                "class_polygon": None,
+                                "polygon": None,
+                                "exam_mode": None,
+                                "organ": None,
                                 "file_type": "frame",
-                                "bb_annotype": "NN",
-                                "polygon_annotype": "NN",
-                                "masks": "NN",
+                                "bb_annotype": None,
+                                "polygon_annotype": None,
+                                "masks": None,
                                 "path": file_path  # Points to the original video
                             })
 

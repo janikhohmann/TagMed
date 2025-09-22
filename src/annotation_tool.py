@@ -247,7 +247,7 @@ class AnnotationTool:
 
         # sort intelligently: numerically if possible, otherwise alphabetically
         try:
-            data.sort(key=lambda t: float(t[0]) if t[0] != "NN" else float("-inf"), reverse=reverse)
+            data.sort(key=lambda t: float(t[0]) if t[0] != None else float("-inf"), reverse=reverse)
         except ValueError:
             data.sort(key=lambda t: t[0], reverse=reverse)
 
