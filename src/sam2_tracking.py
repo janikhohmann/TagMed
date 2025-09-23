@@ -108,7 +108,8 @@ class SAM2Tracking:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.config_path = os.path.join(script_dir, "configs") # Directory where the config files are saved
 
-        print(self.gui.tracking_type.get())
+        # Determine model based on user selection
+        # print(self.gui.tracking_type.get())
         if self.gui.tracking_type.get() == "SAM2 large":
             self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
             self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_large.pt"
@@ -117,6 +118,12 @@ class SAM2Tracking:
             self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_tiny.pt")
             self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_tiny.pt"
             self.config_name = "sam2.1_hiera_t.yaml"
+
+        # catch for image segmentation - fallback to large
+        if self.gui.tracking_type.get() not in ["SAM2 large", "SAM2 tiny"]:
+            self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
+            self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_large.pt"
+            self.config_name = "sam2.1_hiera_l.yaml"
 
         # Other SAM 2.1 checkpoints can be defined here
         # self.sam2p1_hiera_s_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_small.pt"

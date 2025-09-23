@@ -456,6 +456,7 @@ class GalleryNavigator:
         """
 
         self.video_mode = True
+        self.selected_image_index = None
 
         selection = self.video_listbox.curselection()
         if not selection:

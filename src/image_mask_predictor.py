@@ -31,6 +31,7 @@ from hydra import initialize_config_dir
 
 from config_handler import ConfigHandler
 from mask_handler import MaskHandler
+from sam2_tracking import SAM2Tracking
 
 
 class ImageMaskPredictor:
@@ -67,6 +68,8 @@ class ImageMaskPredictor:
         image_size = config.get("image_size")
         self.resize_h, self.resize_w = image_size
 
+        self.sam2_tracking = SAM2Tracking(gui)
+
 
 
     def predict_mask_for_image_bb(self, df_index, x,y,w,h):
@@ -93,23 +96,48 @@ class ImageMaskPredictor:
             image_id = self.gui.current_frames[self.gui.current_frame_index].split(".")[0]
             file_name = self.gui.current_frames[self.gui.current_frame_index]
 
-        print(self.gui.selected_image_index, "selected image index")
-        print(f"Predicting mask for image {image_id} with bounding box {input_box}")
+        # print(self.gui.selected_image_index, "selected image index")
+        # print(f"Predicting mask for image {image_id} with bounding box {input_box}")
 
-        frame_path = os.path.join(
-            self.selected_image_folder, 
-            self.gui.patient_id, 
-            self.gui.selected_exam, 
-            file_name
+        # Use VideoFrameExtractor to get correct frame path (handles temp directories)
+        if hasattr(self.gui, 'video_frame_extractor') and hasattr(self.gui, 'selected_video_index') and self.gui.selected_video_index is not None:
+            # print("[DEBUG] Using VideoFrameExtractor for frame path")
+            
+            # selected_video_index might be the video name directly, not an index
+            if isinstance(self.gui.selected_video_index, str):
+                current_video = self.gui.selected_video_index
+                # print(f"[DEBUG] Current video (from string): {current_video}")
+            else:
+                # If it's actually a numeric index, get from listbox
+                current_video = self.gui.video_listbox.get(self.gui.selected_video_index)
+                # print(f"[DEBUG] Current video (from index): {current_video}")
+            
+            # For video frames, use VideoFrameExtractor to get correct path
+            image_folder = os.path.join(self.selected_image_folder, self.gui.patient_id, self.gui.selected_exam)
+            frame_path = self.gui.video_frame_extractor.get_frame_path(
+                self.gui.patient_id, 
+                self.gui.selected_exam, 
+                current_video,
+                file_name,
+                image_folder
+            )
+        else:
+            # print("[DEBUG] Using fallback path for regular images")
+            # Fallback for regular images (non-video frames)
+            frame_path = os.path.join(
+                self.selected_image_folder, 
+                self.gui.patient_id, 
+                self.gui.selected_exam, 
+                file_name
             )
         
         if not self.gui.img_annotation_listbox.curselection():
-            annotation_index = self.gui.img_annotation_listbox.size() - 1
+            annotation_index = self.gui.img_annotation_listbox.size()
         else:
             selected_annotation = self.gui.img_annotation_listbox.curselection()
             annotation_index = selected_annotation[0]
         
-
+        # print(f"[ERROR SEARCH] Using frame path: {frame_path}")
 
         if not hasattr(self, "sam2_image_predictor") or self.sam2_image_predictor is None:
             # select the device for computation
@@ -185,7 +213,7 @@ class ImageMaskPredictor:
 
 
         if not self.gui.img_annotation_listbox.curselection():
-            annotation_index = self.gui.img_annotation_listbox.size() - 1
+            annotation_index = self.gui.img_annotation_listbox.size()
         else:
             selected_annotation = self.gui.img_annotation_listbox.curselection()
             annotation_index = selected_annotation[0]
