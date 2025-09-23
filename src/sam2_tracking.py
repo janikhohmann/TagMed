@@ -203,12 +203,12 @@ class SAM2Tracking:
 
             # Check if model file exists
             if not os.path.exists(self.sam2p1_model_path):
-                print(f"[ERROR] AM2 model file not found at: {self.sam2p1_model_path}")
+                print(f"[ERROR] SAM2 model file not found at: {self.sam2p1_model_path}")
                 print("[INFO] Please ensure the SAM2 model is downloaded.")
                 self.sam2_predictor = None
                 return
 
-            # Clean previous Hydra initialization
+            # Clean previous Hydra initializations
             if GlobalHydra.instance().is_initialized():
                 GlobalHydra.instance().clear()
 
