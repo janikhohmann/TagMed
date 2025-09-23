@@ -88,7 +88,7 @@ class SAM2Tracking:
 
         # Model instances
         self.sam2_predictor = None
-        self.inference_state = None  # For video tracking state
+        # self.inference_state = None  # For video tracking state
 
 
 
@@ -226,7 +226,7 @@ class SAM2Tracking:
                     vos_optimized=True,
                 )
 
-            self.inference_state = None
+            #self.inference_state = None
             print("[INFO] SAM2 video predictor successfully loaded.")
 
         except Exception as e:
@@ -272,9 +272,9 @@ class SAM2Tracking:
 
         try:
             # Reset any previous state and initialize for this video sequence
-            if hasattr(self, 'inference_state') and self.inference_state is not None:
+            if hasattr(self, 'inference_state') and self.gui.inference_state is not None:
                 try:
-                    predictor.reset_state(self.inference_state)
+                    predictor.reset_state(self.gui.inference_state)
                 except:
                     pass  # Ignore reset errors
             
@@ -287,7 +287,7 @@ class SAM2Tracking:
             
             try:
                 # print("[DEBUG] Calling predictor.init_state()...")
-                self.inference_state = predictor.init_state(video_path=temp_video_dir)
+                self.gui.inference_state = predictor.init_state(video_path=temp_video_dir)
                 # print("[DEBUG] init_state() completed successfully")
             except Exception as e:
                 print(f"[ERROR] Failed to initialize inference state: {e}")
@@ -355,7 +355,7 @@ class SAM2Tracking:
                     # print(f"[DEBUG] Adding points for polygon tracking: points={points}, labels={labels}, obj_id={ann_obj_id}")
                     try:
                         _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                            inference_state=self.inference_state,
+                            inference_state=self.gui.inference_state,
                             frame_idx=current_frame_index,
                             obj_id=ann_obj_id,
                             points=points,
@@ -423,7 +423,7 @@ class SAM2Tracking:
                     
                     try:
                         _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                            inference_state=self.inference_state,
+                            inference_state=self.gui.inference_state,
                             frame_idx=current_frame_index,
                             obj_id=ann_obj_id,
                             box=input_box,
@@ -448,7 +448,7 @@ class SAM2Tracking:
             try:
                 print("[DEBUG] Starting propagate_in_video()...")
                 frame_count = 0
-                for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.inference_state):
+                for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(self.gui.inference_state):
                     frame_count += 1
                     #if frame_count % 10 == 0:  # Progress indicator every 10 frames
                         #print(f"[DEBUG] Processed {frame_count} frames...")

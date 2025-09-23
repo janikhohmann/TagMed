@@ -457,6 +457,7 @@ class GalleryNavigator:
 
         self.video_mode = True
         self.selected_image_index = None
+        self.inference_state = None
 
         selection = self.video_listbox.curselection()
         if not selection:
@@ -492,6 +493,7 @@ class GalleryNavigator:
             image_folder=image_folder
         )
         
+
         self.current_frames = current_frames
         self.current_frame_index = 0
         self.current_frame_id = current_frames[self.current_frame_index].split(".")[0].strip() if current_frames else None
