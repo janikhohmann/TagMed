@@ -457,7 +457,7 @@ def main_setup():
     # Detect platform and get configuration
     system, env_python, env_pip, activate_script, python_cmd = get_platform_info()
     
-    print(f"🖥️  Platform detected: {platform.system()} {platform.machine()}")
+    print(f"  Platform detected: {platform.system()} {platform.machine()}")
     
     # Run setup steps
     check_system_requirements()
