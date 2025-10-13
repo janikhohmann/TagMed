@@ -546,7 +546,7 @@ class ImgAnnotationHandler:
         """
 
         # remove any existing temporary bounding box by tag
-        self.gui.frame_canvas.delete("temp_boundingbox")
+        self.gui.image_canvas.delete("temp_boundingbox")
 
         x, y = event.x, event.y  # Extract mouse position from event
         annotation_mode = self.gui.img_annotation_type.get()  # Get current annotation type

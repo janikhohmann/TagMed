@@ -1376,6 +1376,7 @@ class VideoAnnotationHandler():
         for rect_id in self.drawn_rect_ids:
             self.gui.frame_canvas.delete(rect_id)
         self.drawn_rect_ids.clear()
+        self.gui.frame_canvas.delete("temp_boundingbox")
 
         # Clear all mask overlays from previous frame
         self.mask_handler.clear_all_masks()

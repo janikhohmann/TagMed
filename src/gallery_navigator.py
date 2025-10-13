@@ -391,6 +391,8 @@ class GalleryNavigator:
             event: Tkinter listbox selection event
         """
 
+        self.image_canvas.delete("temp_boundingbox") # clean up any temporary bounding box
+
         self.video_mode = False
 
         selection = self.image_listbox.curselection()
