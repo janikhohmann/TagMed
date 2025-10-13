@@ -51,6 +51,7 @@ class VideoAnnotationHandler():
         self.rect_start = None   # Starting coordinates (x, y) for rectangle drawing
         self.rect_end = None     # Ending coordinates (x, y) for rectangle drawing
         self.rect_id = None      # Canvas ID of the currently drawn rectangle
+        self.temp_rect_id = None # Temporary canvas ID for rectangle during drawing
         self.resize_handles = [] # List of canvas IDs for resize handle elements
         self.resize_handle_size = 3  # Size of resize handles in pixels
 
@@ -206,12 +207,16 @@ class VideoAnnotationHandler():
                 self.gui.all_annotations.at[idx, col] = new_value
 
             # Register rectangle canvas element for future reference and manipulation
+            self.rect_id = self.temp_rect_id
             self.drawn_rect_ids.append(self.rect_id)
+            self.temp_rect_id = None  # Clear temporary rectangle ID after assignment
+
+            self.gui.frame_canvas.itemconfig(self.rect_id, tags=("boundingbox",)) # Set permanent tag
 
             # Generate frame mask prediction if mask creation is enabled
             if self.gui.create_frame_mask_var.get():
                 self.image_mask_predictor.predict_mask_for_image_bb(idx, x, y, w, h)
-
+            
             print(f"[DEBUG] Added Bounding Box with rect_id {self.rect_id}")
 
         # === Polygon Annotation Processing ===
@@ -586,6 +591,9 @@ class VideoAnnotationHandler():
             - Modify Mode: Begins editing of existing frame annotations
             - Validates annotation type compatibility and mode states
         """
+        # remove any existing temporary bounding box by tag
+        self.gui.frame_canvas.delete("temp_boundingbox")
+
         x, y = event.x, event.y  # Extract mouse position from event
         annotation_mode = self.gui.video_annotation_type.get()  # Get current video annotation type
 
@@ -600,8 +608,8 @@ class VideoAnnotationHandler():
                 # Initialize bounding box drawing on frame canvas
                 self.is_drawing = True
                 self.rect_start = (x, y)
-                self.rect_id = self.gui.frame_canvas.create_rectangle(
-                    x, y, x, y, outline="red", width=2, tags="boundingbox")
+                self.temp_rect_id = self.gui.frame_canvas.create_rectangle(
+                    x, y, x, y, outline="red", width=2, tags="temp_boundingbox") # Temporary tag for new rectangle
                     
             else:  # Polygon mode
                 # Determine polygon index for proper canvas organization
@@ -669,9 +677,10 @@ class VideoAnnotationHandler():
         if not self.gui.modify_mode.get():
             if annotation_mode == "Bounding Box":
                 # Update rectangle coordinates during drawing on frame canvas
-                if self.is_drawing and self.rect_id:
+                # use the temporary rectangle id while drawing (temp_rect_id)
+                if self.is_drawing and self.temp_rect_id:
                     self.gui.frame_canvas.coords(
-                        self.rect_id,
+                        self.temp_rect_id,
                         self.rect_start[0], self.rect_start[1],
                         x, y
                     )

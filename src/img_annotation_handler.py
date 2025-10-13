@@ -39,6 +39,7 @@ class ImgAnnotationHandler:
         self.rect_start = None   # Starting coordinates (x, y) for rectangle drawing
         self.rect_end = None     # Ending coordinates (x, y) for rectangle drawing
         self.rect_id = None      # Canvas ID of the currently drawn rectangle
+        self.temp_rect_id = None # Temporary canvas ID for rectangle during drawing
         self.resize_handles = [] # List of canvas IDs for resize handle elements
         self.resize_handle_size = 3  # Size of resize handles in pixels
 
@@ -177,7 +178,11 @@ class ImgAnnotationHandler:
                 self.gui.all_annotations.at[idx, col] = new_value
 
             # Register rectangle canvas element for future reference and manipulation
+            self.rect_id = self.temp_rect_id
             self.drawn_rect_ids.append(self.rect_id)
+            self.temp_rect_id = None  # Clear temporary rectangle ID after assignment
+
+            self.gui.frame_canvas.itemconfig(self.rect_id, tags=("boundingbox",)) # Set permanent tag
             
             # Generate mask prediction if mask creation is enabled
             if self.gui.create_mask_var.get():
@@ -539,12 +544,16 @@ class ImgAnnotationHandler:
             - Modify Mode: Begins editing of existing annotations
             - Validates annotation type compatibility and mode states
         """
+
+        # remove any existing temporary bounding box by tag
+        self.gui.frame_canvas.delete("temp_boundingbox")
+
         x, y = event.x, event.y  # Extract mouse position from event
         annotation_mode = self.gui.img_annotation_type.get()  # Get current annotation type
 
         # Validate supported annotation types
-        if annotation_mode not in ["Bounding Box", "Polygon", "Magic Wand"]:
-            print("[ERROR] Invalid annotation type selected. Only 'Bounding Box', 'Polygon' and 'Magic Wand' are supported.")
+        if annotation_mode not in ["Bounding Box", "Polygon"]:
+            print("[ERROR] Invalid annotation type selected. Only 'Bounding Box' and 'Polygon' are supported.")
             return
 
         # === Drawing Mode - Create New Annotations ===   
@@ -553,8 +562,8 @@ class ImgAnnotationHandler:
                 # Initialize bounding box drawing
                 self.is_drawing = True
                 self.rect_start = (x, y)
-                self.rect_id = self.gui.image_canvas.create_rectangle(
-                    x, y, x, y, outline="red", width=2)
+                self.temp_rect_id = self.gui.image_canvas.create_rectangle(
+                    x, y, x, y, outline="red", width=2, tags="temp_boundingbox")
                     
             else:  # Polygon
                 # Calculate polygon index for proper canvas element organization
@@ -615,9 +624,10 @@ class ImgAnnotationHandler:
         if not self.gui.modify_mode.get():
             if annotation_mode == "Bounding Box":
                 # Update rectangle coordinates during drawing
-                if self.is_drawing and self.rect_id:
+                # use the temporary rectangle id while drawing (temp_rect_id)
+                if self.is_drawing and self.temp_rect_id:
                     self.gui.image_canvas.coords(
-                        self.rect_id,
+                        self.temp_rect_id,
                         self.rect_start[0], self.rect_start[1],
                         x, y
                     )
