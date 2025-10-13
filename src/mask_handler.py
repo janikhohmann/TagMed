@@ -176,7 +176,8 @@ class MaskHandler:
                     continue
                 
                 height, width = mask_data.shape
-                red_color = (255, 0, 0, 70)  # bright, transparent red (alpha=60/255)
+                #red_color = (255, 0, 0, 70)  # bright, transparent red (alpha=60/255)
+                red_color = (255, 165, 0, 150)  # Orange
                 rgba_array = np.zeros((height, width, 4), dtype=np.uint8)
 
                 rgba_array[mask_data > 0] = red_color  # only fill mask
