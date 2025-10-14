@@ -345,6 +345,9 @@ class VideoAnnotationHandler():
                 if index < len(polygons):
                     is_polygon = True
 
+            # Retrieve associated mask data for potential cleanup
+            masks_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'masks'])
+
             # === Polygon Annotation Deletion ===
             if is_polygon:
                 # Extract polygon-related data lists from DataFrame
@@ -359,23 +362,31 @@ class VideoAnnotationHandler():
                 if index < len(annotype_list):
                     annotype_list.pop(index)
 
+               # Delete associated mask if it exists
+                if index < len(masks_list):
+                    mask_to_delete = masks_list[index]
+                    self.mask_handler.delete_mask(mask_to_delete)
+                    masks_list.pop(index)
+
                 # Update DataFrame with modified lists (use None if lists become empty)
                 self.gui.all_annotations.at[idx, 'polygon'] = polygons if polygons else None
                 self.gui.all_annotations.at[idx, 'class_polygon'] = class_list if class_list else None
                 self.gui.all_annotations.at[idx, 'polygon_annotype'] = annotype_list if annotype_list else None
+                self.gui.all_annotations.at[idx, 'masks'] = masks_list if masks_list else None
+
 
             # === Bounding Box Annotation Deletion ===
             else:
-                # Delete associated mask before removing annotation data
-                mask_paths = self._safe_parse_list(self.gui.all_annotations.at[idx, 'masks'])
-                if index < len(mask_paths):
-                    path_to_remove = mask_paths[index]
-                    print(f"[DEBUG] Deleting mask at path: {path_to_remove}")
-                    self.mask_handler.delete_mask(path_to_remove)
-
                 # Remove data from all bounding box-related columns
                 for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype', 'masks']:
                     val = self._safe_parse_list(self.gui.all_annotations.at[idx, col])
+
+                    # Delete associated mask before removing mask reference
+                    if col == 'masks' and index < len(val):
+                        mask_to_delete = masks_list[index]
+                        self.mask_handler.delete_mask(mask_to_delete)
+
+
                     if index < len(val):
                         val.pop(index)
                     # Update DataFrame column with modified list

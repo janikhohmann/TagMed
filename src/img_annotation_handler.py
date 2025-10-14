@@ -315,7 +315,6 @@ class ImgAnnotationHandler:
                 annotype_list = self._safe_parse_list(self.gui.all_annotations.at[idx, 'polygon_annotype'])
                 
 
-
                 # Remove data at specified index from all polygon-related lists
                 polygons.pop(index)
                 if index < len(class_list):
