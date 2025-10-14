@@ -149,6 +149,8 @@ class GalleryNavigator:
 
         self.patient_window.protocol("WM_DELETE_WINDOW", self.saving_progress_question)
         self.patient_window.bind("<Control-z>", lambda event: self.delete_last_polygon_point_manager())
+        self.patient_window.bind("<Control-e>", lambda event: self.modify_annotation_manager())
+        
 
 
         # get exams for the patient
@@ -601,7 +603,9 @@ class GalleryNavigator:
         save_button.pack(pady=2, fill=tk.X)
 
         # Modify Mode Toggle (Checkbutton)
-        modify_toggle = ttk.Checkbutton(controls_frame, text="Modify Mode", variable=self.modify_mode, command=self.img_annotation_handler.modify_annotation)
+        modify_toggle = ttk.Checkbutton(controls_frame, text="Modify Mode", 
+                                        variable=self.modify_mode, 
+                                        command=self.img_annotation_handler.modify_annotation)
         modify_toggle.pack(pady=(10, 2), anchor="w") # Slightly more space above, left-aligned
 
         # --- Column 2: Listbox for Objects ---
@@ -730,6 +734,7 @@ class GalleryNavigator:
                                         variable=self.modify_mode,
                                         command=self.video_annotation_handler.modify_annotation)
         modify_toggle.pack(pady=(10, 2), anchor="w")
+        
 
         # Listbox (Column 2)
         listbox_area_frame = tk.Frame(bottom_frame)
@@ -1031,6 +1036,36 @@ class GalleryNavigator:
         elif str(self.frame_canvas).startswith(current_tab):
             # print("[DEBUG] Using video_annotation_handler")
             self.video_annotation_handler.delete_last_polygon_point()
+
+    def modify_annotation_manager(self):
+
+        """
+        Manages modification mode toggle across different tabs.
+        
+        Determines which tab (image or video) is currently active and
+        delegates the modify mode action to the appropriate annotation
+        handler. Bound to Ctrl+E keyboard shortcut. E for edit.
+        """
+
+        current_tab = self.notebook.select()
+
+        if self.modify_mode.get():
+            self.modify_mode.set(False)
+            if str(self.image_canvas).startswith(current_tab):
+                # print("[DEBUG] Using img_annotation_handler")
+                self.img_annotation_handler.modify_annotation()
+            elif str(self.frame_canvas).startswith(current_tab):
+                # print("[DEBUG] Using video_annotation_handler")
+                self.video_annotation_handler.modify_annotation()
+            
+        else:
+            self.modify_mode.set(True)
+            if str(self.image_canvas).startswith(current_tab):
+                # print("[DEBUG] Using img_annotation_handler")
+                self.img_annotation_handler.modify_annotation()
+            elif str(self.frame_canvas).startswith(current_tab):
+                # print("[DEBUG] Using video_annotation_handler")
+                self.video_annotation_handler.modify_annotation()
 
     def wait_for_tracking_gui(self, on_complete=None):
         """
