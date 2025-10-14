@@ -182,7 +182,7 @@ class ImgAnnotationHandler:
             self.drawn_rect_ids.append(self.rect_id)
             self.temp_rect_id = None  # Clear temporary rectangle ID after assignment
 
-            self.gui.frame_canvas.itemconfig(self.rect_id, tags=("boundingbox",)) # Set permanent tag
+            self.gui.image_canvas.itemconfig(self.rect_id, tags=("boundingbox",)) # Set permanent tag
             
             # Generate mask prediction if mask creation is enabled
             if self.gui.create_mask_var.get():
@@ -830,14 +830,14 @@ class ImgAnnotationHandler:
 
 
     def delete_all_polygons(self):
-        self.gui.frame_canvas.delete("polygon")  # deletes everything with the tag "polygon"
+        self.gui.image_canvas.delete("polygon")  # deletes everything with the tag "polygon"
         self.polygon_point_ids = []
         self.polygon_points = []
         self.polygon_line_id = None
         # print("[DEBUG] All polygon elements have been deleted.")
 
     def delete_all_bounding_boxes(self):
-        self.gui.frame_canvas.delete("boundingbox")  # deletes all with the tag "boundingbox"
+        self.gui.image_canvas.delete("boundingbox")  # deletes all with the tag "boundingbox"
         self.drawn_rect_ids = []
         # print("[DEBUG] All bounding box elements have been deleted.")
 

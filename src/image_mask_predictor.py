@@ -130,12 +130,26 @@ class ImageMaskPredictor:
                 self.gui.selected_exam, 
                 file_name
             )
+
+        # Determine annotation index whether we are annotating an image or a video frame
+        current_tab = self.gui.notebook.select() # get the currently selected tab
+
+        if str(self.gui.image_canvas).startswith(current_tab): # get index from the correct listbox - image
+            self.showing_video = False
+            if not self.gui.img_annotation_listbox.curselection():
+                annotation_index = self.gui.img_annotation_listbox.size()
+            else:
+                selected_annotation = self.gui.img_annotation_listbox.curselection()
+                annotation_index = selected_annotation[0]
+
+        elif str(self.gui.frame_canvas).startswith(current_tab): # get index from the correct listbox - video frame
+            self.showing_video = True
+            if not self.gui.video_annotation_listbox.curselection():
+                annotation_index = self.gui.video_annotation_listbox.size()
+            else:
+                selected_annotation = self.gui.video_annotation_listbox.curselection()
+                annotation_index = selected_annotation[0]
         
-        if not self.gui.img_annotation_listbox.curselection():
-            annotation_index = self.gui.img_annotation_listbox.size()
-        else:
-            selected_annotation = self.gui.img_annotation_listbox.curselection()
-            annotation_index = selected_annotation[0]
         
         # print(f"[ERROR SEARCH] Using frame path: {frame_path}")
 
@@ -186,8 +200,6 @@ class ImageMaskPredictor:
         # Convert mask to polygon and save mask
         path_mask = self.mask_handler.save_mask(mask, image_id, self.gui.img_selected_class.get(), annotation_index)
 
-        print(f"[DEBUG] BB Mask saved at: {path_mask}")
-
         # Ensure the "masks" column is of object type to hold lists - FUTURE FIX FOR PANDAS WARNING
         if self.gui.all_annotations["masks"].dtype != object:
             self.gui.all_annotations["masks"] = self.gui.all_annotations["masks"].astype(object)
@@ -218,11 +230,24 @@ class ImageMaskPredictor:
             file_name = self.gui.current_frames[self.gui.current_frame_index]
 
 
-        if not self.gui.img_annotation_listbox.curselection():
-            annotation_index = self.gui.img_annotation_listbox.size()
-        else:
-            selected_annotation = self.gui.img_annotation_listbox.curselection()
-            annotation_index = selected_annotation[0]
+        # Determine annotation index whether we are annotating an image or a video frame
+        current_tab = self.gui.notebook.select() # get the currently selected tab
+
+        if str(self.gui.image_canvas).startswith(current_tab): # get index from the correct listbox - image
+            self.showing_video = False
+            if not self.gui.img_annotation_listbox.curselection():
+                annotation_index = self.gui.img_annotation_listbox.size()
+            else:
+                selected_annotation = self.gui.img_annotation_listbox.curselection()
+                annotation_index = selected_annotation[0]
+
+        elif str(self.gui.frame_canvas).startswith(current_tab): # get index from the correct listbox - video frame
+            self.showing_video = True
+            if not self.gui.video_annotation_listbox.curselection():
+                annotation_index = self.gui.video_annotation_listbox.size()
+            else:
+                selected_annotation = self.gui.video_annotation_listbox.curselection()
+                annotation_index = selected_annotation[0]
 
         # Convert polygon to numpy array and reshape
         points = np.array(polygon).reshape(-1, 2).astype(np.int32)
@@ -235,7 +260,9 @@ class ImageMaskPredictor:
 
         path_mask = self.mask_handler.save_mask(mask, image_id, self.gui.img_selected_class.get(), annotation_index)
 
-        print(f"[DEBUG] Polygon Mask saved at: {path_mask}")
+        # Ensure the "masks" column is of object type to hold lists - FUTURE FIX FOR PANDAS WARNING
+        if self.gui.all_annotations["masks"].dtype != object:
+            self.gui.all_annotations["masks"] = self.gui.all_annotations["masks"].astype(object)
 
         if not self.gui.img_annotation_listbox.curselection() and df_index is not None: # mask path only has to be updated if no annotation is selected in the listbox
             self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[df_index, "masks"], path_mask)
