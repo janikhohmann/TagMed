@@ -186,6 +186,12 @@ class ImageMaskPredictor:
         # Convert mask to polygon and save mask
         path_mask = self.mask_handler.save_mask(mask, image_id, self.gui.img_selected_class.get(), annotation_index)
 
+        print(f"[DEBUG] BB Mask saved at: {path_mask}")
+
+        # Ensure the "masks" column is of object type to hold lists - FUTURE FIX FOR PANDAS WARNING
+        if self.gui.all_annotations["masks"].dtype != object:
+            self.gui.all_annotations["masks"] = self.gui.all_annotations["masks"].astype(object)
+
         if not self.gui.img_annotation_listbox.curselection() and df_index is not None: # mask path only has to be updated if no annotation is selected in the listbox
             self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[df_index, "masks"], path_mask)
             return None 
@@ -228,6 +234,8 @@ class ImageMaskPredictor:
         cv2.fillPoly(mask, [points], 1)
 
         path_mask = self.mask_handler.save_mask(mask, image_id, self.gui.img_selected_class.get(), annotation_index)
+
+        print(f"[DEBUG] Polygon Mask saved at: {path_mask}")
 
         if not self.gui.img_annotation_listbox.curselection() and df_index is not None: # mask path only has to be updated if no annotation is selected in the listbox
             self.gui.all_annotations.at[df_index, "masks"] = self._append_or_init_list(self.gui.all_annotations.at[df_index, "masks"], path_mask)
