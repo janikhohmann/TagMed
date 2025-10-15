@@ -147,7 +147,10 @@ class GalleryNavigator:
 
         self.patient_id = patient_id
 
+        # Handle window close event to prompt for saving progress
         self.patient_window.protocol("WM_DELETE_WINDOW", self.saving_progress_question)
+
+        # Shortcut bindings for common actions
         self.patient_window.bind("<Control-z>", lambda event: self.delete_last_polygon_point_manager())
         self.patient_window.bind("<Control-e>", lambda event: self.modify_annotation_manager())
         
