@@ -1,11 +1,11 @@
 {
   "class_list": [
-    "Class 1",
-    "Class 2"
+    "Class1",
+    "Class2"
   ],
-  "selected_image_folder": "/home/janik/Documents/SONO/test_sono_data/renamed_subset_raw",
-  "selected_anno_table_file": "auto_generated_anno_table.csv",
-  "selected_medical_report_file": "/home/janik/Documents/SONO/data_tables/DATABASE/ALL_EXAMS.csv",
+  "selected_image_folder": "/path/to/your/image_database.csv",
+  "selected_anno_table_file": "/path/to/your/annotation_database.csv",
+  "selected_medical_report_file": "/path/to/your/medical_report_database.csv",
   "image_size": [
     600,
     600
