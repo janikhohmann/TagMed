@@ -397,10 +397,7 @@ def create_project_structure():
     
     directories = [
         "models",          # For SAM/MedSAM model storage
-        "masks",           # For generated mask storage
-        "config",          # For configuration files
-        "data",            # For sample data (optional)
-        "logs"             # For application logs
+        "masks"            # For generated mask storage
     ]
     
     for directory in directories:
