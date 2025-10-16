@@ -304,7 +304,7 @@ def upgrade_pip_and_tools(env_pip):
     
     essential_tools = ["pip", "wheel", "setuptools"]
     for tool in essential_tools:
-        run_command(f"{env_pip} install --upgrade {tool}", f"Upgrading {tool}")
+        run_command(f"{env_pip} -m pip install --upgrade {tool}", f"Upgrading {tool}")
     
     print(" Build tools updated")
 
