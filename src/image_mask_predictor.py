@@ -60,7 +60,9 @@ class ImageMaskPredictor:
         self.abs_model_dir = os.path.abspath(model_dir)
         # set a fallback model
         self.sam2_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
-        self.config_path = "/home/janik/Documents/scripts/TagMed/TagMed/src/configs"
+        
+        config_dir="configs"  # Directory where the configs are saved
+        self.abs_config_dir = os.path.abspath(config_dir)
         self.config_name = "sam2.1_hiera_l"
 
         config = ConfigHandler()
@@ -168,7 +170,7 @@ class ImageMaskPredictor:
                 GlobalHydra.instance().clear()
 
             # Initialize Hydra config context
-            with initialize_config_dir(config_dir=self.config_path, version_base=None):
+            with initialize_config_dir(config_dir=self.abs_config_dir, version_base=None):
                 # Build the predictor (Hydra will now compose internally)
                 self.sam2_model = build_sam2(self.config_name, self.sam2_model_path, device=device)
 
