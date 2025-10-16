@@ -318,6 +318,11 @@ def install_core_packages(env_pip):
     """
     print(f"\n [3/7] Installing core Python packages...")
     
+    print("")
+    print(f"VIRTUAL_ENV: {os.environ.get('VIRTUAL_ENV')}")
+    print(f"Using pip from: {env_pip}")
+    subprocess.run([env_pip, "--version"], check=True)
+    print("")
     core_packages = [
         "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121",  # PyTorch ecosystem
         "opencv-python",                  # Computer vision
@@ -446,6 +451,7 @@ def main_setup():
     """
     Main setup function coordinating the entire installation process.
     """
+    print("")
     print("=" * 70)
     print("TagMed Setup Script - Medical Annotation Tool")
     print("=" * 70)
@@ -453,7 +459,7 @@ def main_setup():
     # Detect platform and get configuration
     system, env_python, env_pip, activate_script, python_cmd = get_platform_info()
     
-    print(f"  Platform detected: {platform.system()} {platform.machine()}")
+    print(f" Platform detected: {platform.system()} {platform.machine()}")
     
     # Run setup steps
     check_system_requirements()
@@ -474,7 +480,7 @@ def main_setup():
     if system == "windows":
         print("   Option 1: Double-click start_tagmed.bat")
         print("   Option 2: Manual activation:")
-        print("     1. tagmed-env\\Scripts\\activate.bat")
+        print("     1. tagmed-env\\Scripts\\activate.bat (or Activate.ps1 if you are using PowerShell)" )
         print("     2. cd src")
         print("     3. python main.py")
     else:
