@@ -319,7 +319,7 @@ def install_core_packages(env_pip):
     print(f"\n [3/7] Installing core Python packages...")
     
     core_packages = [
-        "torch torchvision torchaudio",  # PyTorch ecosystem
+        "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121",  # PyTorch ecosystem
         "opencv-python",                  # Computer vision
         "pandas",                         # Data manipulation
         "numpy",                          # Numerical computing
