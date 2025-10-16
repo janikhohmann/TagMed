@@ -18,7 +18,8 @@ Institution: University Hospital Düsseldorf
 import json
 import os
 
-SETTINGS_FILE = "user_settings.json"
+SETTINGS_FILE="../user_settings.json"  
+ABS_SETTINGS_FILE = os.path.abspath(SETTINGS_FILE) # Absolute path to the settings file
 
 class ConfigHandler:
     """

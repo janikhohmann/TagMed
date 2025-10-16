@@ -304,7 +304,7 @@ def upgrade_pip_and_tools(env_pip):
     
     essential_tools = ["pip", "wheel", "setuptools"]
     for tool in essential_tools:
-        run_command(f"{env_pip} -m pip install --upgrade {tool}", f"Upgrading {tool}")
+        run_command(f"{env_pip} install --upgrade {tool}", f"Upgrading {tool}")
     
     print(" Build tools updated")
 
@@ -425,10 +425,9 @@ def finalize_setup(system, activate_script):
         startup_script = "start_tagmed.bat"
         with open(startup_script, 'w') as f:
             f.write("@echo off\n")
-            f.write("call tagmed-env\\Scripts\\activate.bat\n")
-            f.write("cd src\n")
-            f.write("python main.py\n")
-            f.write("pause\n")
+            # f.write("tagmed-env\\Scripts\\python.exe src\\main.py\n")
+            # f.write("pause\n")
+            f.write("cmd /k \"call tagmed-env\\Scripts\\activate.bat && cd src && python main.py\"\n")
         print(f"   Created startup script: {startup_script}")
     else:
         startup_script = "start_tagmed.sh"

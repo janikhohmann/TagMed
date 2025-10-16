@@ -409,22 +409,23 @@ class AnnotationLoader():
                         print(f"[WARNING] No frames extractable for video '{file}'")
 
         df = pd.DataFrame(entries)
-        default_path = os.path.join("..", "auto_generated_anno_table.csv")
-        df.to_csv(default_path, sep=";", index=False)
+        default_path="../auto_generated_anno_table.csv"  # Directory where the model is saved
+        abs_default_path = os.path.abspath(default_path)
+        df.to_csv(abs_default_path, sep=";", index=False)
         
         total_entries = len(entries)
         video_frames = len([e for e in entries if e["file_type"] == "frame" and "_frame_" in e["img_ID"]])
         image_entries = total_entries - video_frames
 
-        print(f"[INFO] Annotation table created: {default_path}")
+        print(f"[INFO] Annotation table created: {abs_default_path}")
         print(f"[INFO] Total: {total_entries} entries ({image_entries} images, {video_frames} video frames)")
 
         # set auto generated file in config
         config = ConfigHandler()
-        config.set("selected_anno_table_file", default_path)
+        config.set("selected_anno_table_file", abs_default_path)
         config.save()
 
-        return default_path
+        return abs_default_path
     
 
 
