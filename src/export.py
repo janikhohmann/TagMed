@@ -25,17 +25,19 @@ from config_handler import ConfigHandler
 class ExportHandler:
     def __init__(self, gui):
         self.gui = gui
-        self.config = ConfigHandler()
+        
 
     def coco_export(self):
         """
         Export annotations to the specified export directory in CSV format.
         """
+        self.config = ConfigHandler()
         self.export_dir = self.config.get("export_directory", "../exports")  # Directory to save exported files - should be configurable and absolute
         self.annotation_image_size = self.config.get("image_size", [600, 600])  # Image size for recalculating coordinates
         display_h, display_w = self.annotation_image_size if len(self.annotation_image_size) == 2 else (self.annotation_image_size[1], self.annotation_image_size[0])
         try:
-            self.annotation_df = pd.read_csv(self.config.get("selected_anno_table_file"))  # DataFrame containing annotations
+            # print(self.config.get("selected_anno_table_file"))
+            self.annotation_df = pd.read_csv(self.config.get("selected_anno_table_file"), sep=";")  # DataFrame containing annotations
         except Exception as e:
             print(f"Error loading annotation data: {e}")
             return
@@ -64,21 +66,7 @@ class ExportHandler:
             file_path = row['file_path']
             file_name = os.path.basename(file_path)
 
-
-            height, width, channels = cv2.imread(file_path).shape # abfangen wenn es ein Video ist
-
-            # ==== Image Entry ====
-            if img_id not in image_id_map:
-                image_id = len(image_id_map) + 1
-                image_id_map[img_id] = image_id
-                coco["images"].append({
-                    "id": image_id,
-                    "file_name": file_name,
-                    "width": width,
-                    "height": height
-                })
-            else:
-                image_id = image_id_map[img_id]
+            image_id = len(image_id_map) + 1 # image id for coco dataset
 
             # === Bounding Box Annotations ===
             if pd.notna(row["x"]):
@@ -97,6 +85,7 @@ class ExportHandler:
                     print(f"[WARN] Could not read image {file_path}, skipping bboxes.")
                 else:
                     orig_h, orig_w = img.shape[0], img.shape[1]
+
                     # fall-back: wenn display_w/display_h 0 oder None, skip
                     if display_w == 0 or display_h == 0:
                         print("[WARN] Display size is zero, skipping scaling.")
@@ -108,7 +97,7 @@ class ExportHandler:
                     for x, y, w, h, c in zip(xs, ys, ws, hs, classes):
                         if pd.isna(c):
                             continue
-                        # stored format: center x,y in display coordinates
+                        # stored format: center x,y in display coordinates to be converted to top-left
                         xmin = float(x) - float(w)/2.0
                         ymin = float(y) - float(h)/2.0
 
@@ -193,23 +182,38 @@ class ExportHandler:
                             "segmentation": [flat_poly]
                         })
                         annotation_id += 1
-            # === JSON speichern ===
-            output_json_path = os.path.join(self.export_dir, "coco_annotations.json")
-            with open(output_json_path, "w", encoding="utf-8") as f:
-                json.dump(coco, f, indent=4)
+            
+            # ==== Image Entry ====
+            if img_id not in image_id_map:
+                
+                image_id_map[img_id] = image_id
+                coco["images"].append({
+                    "id": image_id,
+                    "file_name": file_name,
+                    "width": orig_w,
+                    "height": orig_h
+                })
+            else:
+                image_id = image_id_map[img_id]
+            
+            
+        # === JSON speichern ===
+        output_json_path = os.path.join(self.export_dir, "coco_annotations.json")
+        with open(output_json_path, "w", encoding="utf-8") as f:
+            json.dump(coco, f, indent=4)
 
-    # def voc_export(self):
-    #     """
-    #     Export annotations to the specified export directory in Pascal VOC format.
-    #     """
-    #     self.export_dir = self.config.get("export_directory", "../exports")  # Directory to save exported files - should be configurable and absolute
-    #     try:
-    #         self.annotation_df = pd.read_csv(self.config.get("selected_anno_table_file"))  # DataFrame containing annotations
-    #     except Exception as e:
-    #         print(f"Error loading annotation data: {e}")
-    #         return
+    def voc_export(self):
+        """
+        Export annotations to the specified export directory in Pascal VOC format.
+        """
+        self.export_dir = self.config.get("export_directory", "../exports")  # Directory to save exported files - should be configurable and absolute
+        try:
+            self.annotation_df = pd.read_csv(self.config.get("selected_anno_table_file"))  # DataFrame containing annotations
+        except Exception as e:
+            print(f"Error loading annotation data: {e}")
+            return
 
-    #     print("Starting VOC export process...")
+        print("Starting VOC export process...")
 
 
 # ======================================================================

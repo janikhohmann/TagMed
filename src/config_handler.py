@@ -62,7 +62,9 @@ class ConfigHandler:
             "class_list": [],
             "selected_image_folder": "",
             "selected_anno_table_file": "",
-            "selected_medical_report_file": ""
+            "selected_medical_report_file": "",
+            "export_directory": "../exports",
+            "image_size": [600, 600]
         }
 
     def save(self):

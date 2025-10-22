@@ -15,6 +15,7 @@
 
 ## Overview
 TagMed is designed to facilitate the annotation of sensitive ultrasound images and corresponding medical reports for computer vision projects. 
+
 *INSERT GRAPHICAL ABSTRACT HERE*
 
 ## Features
