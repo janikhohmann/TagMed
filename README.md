@@ -15,6 +15,7 @@
 
 ## Overview
 TagMed is designed to facilitate the annotation of sensitive ultrasound images and corresponding medical reports for computer vision projects. 
+*INSERT GRAPHICAL ABSTRACT HERE*
 
 ## Features
 Medical image annotation, particularly in ultrasound, requires precision, efficiency, and a secure workflow. This tool aims to:
@@ -39,18 +40,15 @@ cd TagMed
 python setup_TagMed.py
 ```
 
-**Activate the environment:**
-```bash
-source tagmed-env/bin/activate
-```
-
 ### 2. Usage
 
-**Start TagMed:**
+**Activate the environment and start TagMed:**
 ```bash
+source tagmed-env/bin/activate
 cd src
 python main.py
 ```
+
 
 **Basic workflow:**
 1. Load your medical image database
