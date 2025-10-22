@@ -32,6 +32,8 @@ class ExportHandler:
         Export annotations to the specified export directory in CSV format.
         """
         self.export_dir = self.config.get("export_directory", "../exports")  # Directory to save exported files - should be configurable and absolute
+        self.annotation_image_size = self.config.get("image_size", [600, 600])  # Image size for recalculating coordinates
+        display_h, display_w = self.annotation_image_size if len(self.annotation_image_size) == 2 else (self.annotation_image_size[1], self.annotation_image_size[0])
         try:
             self.annotation_df = pd.read_csv(self.config.get("selected_anno_table_file"))  # DataFrame containing annotations
         except Exception as e:
@@ -78,7 +80,7 @@ class ExportHandler:
             else:
                 image_id = image_id_map[img_id]
 
-            # ==== Bounding Box Annotations ====
+            # === Bounding Box Annotations ===
             if pd.notna(row["x"]):
                 try:
                     xs = ast.literal_eval(row["x"]) if isinstance(row["x"], str) else [row["x"]]
@@ -89,21 +91,51 @@ class ExportHandler:
                 except Exception:
                     continue
 
-                for x, y, w, h, c in zip(xs, ys, ws, hs, classes):
-                    if pd.isna(c):
-                        continue
-                    coco["annotations"].append({
-                        "id": annotation_id,
-                        "image_id": image_id,
-                        "category_id": category_map.get(c, 0),
-                        "bbox": [x, y, w, h], # wrong format and wrong image size
-                        "area": w * h,
-                        "iscrowd": 0,
-                        "segmentation": []
-                    })
-                    annotation_id += 1
+                # defensive: handle missing image read
+                img = cv2.imread(file_path)
+                if img is None:
+                    print(f"[WARN] Could not read image {file_path}, skipping bboxes.")
+                else:
+                    orig_h, orig_w = img.shape[0], img.shape[1]
+                    # fall-back: wenn display_w/display_h 0 oder None, skip
+                    if display_w == 0 or display_h == 0:
+                        print("[WARN] Display size is zero, skipping scaling.")
+                        scale_x = scale_y = 1.0
+                    else:
+                        scale_x = orig_w / float(display_w)
+                        scale_y = orig_h / float(display_h)
 
-            # ==== Polygon Annotations ====
+                    for x, y, w, h, c in zip(xs, ys, ws, hs, classes):
+                        if pd.isna(c):
+                            continue
+                        # stored format: center x,y in display coordinates
+                        xmin = float(x) - float(w)/2.0
+                        ymin = float(y) - float(h)/2.0
+
+                        # scale from display -> original image coordinates
+                        xmin_s = max(0, xmin * scale_x)
+                        ymin_s = max(0, ymin * scale_y)
+                        w_s = max(0, float(w) * scale_x)
+                        h_s = max(0, float(h) * scale_y)
+
+                        # clip to image bounds
+                        xmin_s = min(xmin_s, orig_w - 1)
+                        ymin_s = min(ymin_s, orig_h - 1)
+                        w_s = min(w_s, orig_w - xmin_s)
+                        h_s = min(h_s, orig_h - ymin_s)
+
+                        coco["annotations"].append({
+                            "id": annotation_id,
+                            "image_id": image_id,
+                            "category_id": category_map.get(c, 0),
+                            "bbox": [int(round(xmin_s)), int(round(ymin_s)), int(round(w_s)), int(round(h_s))],
+                            "area": int(round(w_s * h_s)),
+                            "iscrowd": 0,
+                            "segmentation": [] # looking for mask if available
+                        })
+                        annotation_id += 1
+
+            # === Polygon Annotations ===
             if pd.notna(row["polygon"]):
                 try:
                     polygons = ast.literal_eval(row["polygon"]) if isinstance(row["polygon"], str) else row["polygon"]
@@ -111,27 +143,56 @@ class ExportHandler:
                 except Exception:
                     continue
 
-                for poly, c in zip(polygons, class_poly):
-                    if not poly or pd.isna(c):
-                        continue
+                img = cv2.imread(file_path)
+                if img is None:
+                    print(f"[WARN] Could not read image {file_path}, skipping polygons.")
+                else:
+                    orig_h, orig_w = img.shape[0], img.shape[1]
+                    if display_w == 0 or display_h == 0:
+                        scale_x = scale_y = 1.0
+                    else:
+                        scale_x = orig_w / float(display_w)
+                        scale_y = orig_h / float(display_h)
 
-                    # Flatten polygon points (list of [x,y] -> [x1,y1,x2,y2,...])
-                    flat_poly = [coord for point in poly for coord in point]
+                    def polygon_area(points):
+                        # Shoelace formula. points = list of (x,y)
+                        area = 0.0
+                        n = len(points)
+                        for i in range(n):
+                            x1,y1 = points[i]
+                            x2,y2 = points[(i+1) % n]
+                            area += x1*y2 - x2*y1
+                        return abs(area) / 2.0
 
-                    coco["annotations"].append({
-                        "id": annotation_id,
-                        "image_id": image_id,
-                        "category_id": category_map.get(c, 0),
-                        "bbox": [min(p[0] for p in poly),
-                                min(p[1] for p in poly),
-                                max(p[0] for p in poly) - min(p[0] for p in poly),
-                                max(p[1] for p in poly) - min(p[1] for p in poly)],
-                        "area": 0,  # Optional: calculate area if needed
-                        "iscrowd": 0,
-                        "segmentation": [flat_poly]
-                    })
-                    annotation_id += 1
+                    for poly, c in zip(polygons, class_poly):
+                        if not poly or pd.isna(c):
+                            continue
 
+                        # scale each point
+                        scaled_points = [[float(px) * scale_x, float(py) * scale_y] for px, py in poly]
+                        # flat segmentation for COCO
+                        flat_poly = [coord for p in scaled_points for coord in p]
+
+                        # compute bbox from scaled polygon
+                        xs_poly = [p[0] for p in scaled_points]
+                        ys_poly = [p[1] for p in scaled_points]
+                        xmin = max(0, min(xs_poly))
+                        ymin = max(0, min(ys_poly))
+                        w_poly = max(0, max(xs_poly) - xmin)
+                        h_poly = max(0, max(ys_poly) - ymin)
+
+                        area_poly = polygon_area(scaled_points)
+
+                        coco["annotations"].append({
+                            "id": annotation_id,
+                            "image_id": image_id,
+                            "category_id": category_map.get(c, 0),
+                            "bbox": [int(round(xmin)), int(round(ymin)), int(round(w_poly)), int(round(h_poly))],
+                            "area": int(round(area_poly)),
+                            "iscrowd": 0,
+                            "segmentation": [flat_poly]
+                        })
+                        annotation_id += 1
             # === JSON speichern ===
             output_json_path = os.path.join(self.export_dir, "coco_annotations.json")
             with open(output_json_path, "w", encoding="utf-8") as f:
