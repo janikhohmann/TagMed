@@ -23,6 +23,7 @@ import os
 from config_handler import ConfigHandler
 from annotation_loader import AnnotationLoader
 from gallery_navigator import GalleryNavigator
+from export import ExportHandler
 
 class AnnotationTool:
     """
@@ -59,6 +60,7 @@ class AnnotationTool:
         # === CREATE MENU BAR ===
         self.menubar = tk.Menu(self.root)
         self.filemenu = tk.Menu(self.menubar, tearoff=0)
+        self.export_menu = tk.Menu(self.menubar, tearoff=0)
         self.helpmenu = tk.Menu(self.menubar, tearoff=0)
 
         # File menu: Configuration of folders and files
@@ -69,6 +71,12 @@ class AnnotationTool:
         self.filemenu.add_command(label="Add Medical Reports", command=self.select_medical_reports)
         self.filemenu.add_command(label="Manage Classes", command=self.open_class_manager)
         self.filemenu.add_command(label="Close", command=exit)
+
+        # Export menu: Export annotations
+        self.export_handler = ExportHandler(self)
+        self.menubar.add_cascade(label="Export", menu=self.export_menu)
+        self.export_menu.add_command(label="COCO Format", command=self.export_handler.coco_export)
+        self.export_menu.add_command(label="Pascal VOC Format", command=self.export_handler.voc_export)
 
         # Help menu: Documentation and imprint
         self.menubar.add_cascade(label="Other", menu=self.helpmenu)

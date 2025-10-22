@@ -68,7 +68,7 @@ class GalleryNavigator:
         """
         self.root = root
 
-        # Load configuration settings (immer frisch laden)
+        # Load configuration settings
         config = ConfigHandler()
         self.refresh_configuration()
 

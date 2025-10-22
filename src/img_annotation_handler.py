@@ -1,3 +1,12 @@
+"""
+Image Annotation Handler - Handling of image annotations for TagMed application
+
+
+Author: Janik Hohmann
+Institution: University Hospital Düsseldorf
+"""
+
+
 import tkinter as tk
 import pandas as pd
 import statistics as stat

@@ -6,6 +6,7 @@
   "selected_image_folder": "/path/to/your/image_database.csv",
   "selected_anno_table_file": "/path/to/your/annotation_database.csv",
   "selected_medical_report_file": "/path/to/your/medical_report_database.csv",
+  "export_directory": "/path/to/your/export_directory",
   "image_size": [
     600,
     600

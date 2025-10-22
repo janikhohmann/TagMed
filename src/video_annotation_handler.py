@@ -1,3 +1,12 @@
+"""
+Video Annotation Handler - Handling of videos and frame annotations for TagMed application
+
+
+Author: Janik Hohmann
+Institution: University Hospital Düsseldorf
+"""
+
+
 import pandas as pd
 import os
 import ast
