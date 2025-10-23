@@ -401,7 +401,7 @@ class AnnotationLoader():
                                 "bb_annotype": None,
                                 "polygon_annotype": None,
                                 "masks": None,
-                                "path": file_path  # Points to the original video
+                                "file_path": file_path  # Points to the original video
                             })
 
                         print(f"[INFO] {frame_count} frame entries created for video '{file}' (Frame 1-{frame_count})")

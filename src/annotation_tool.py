@@ -19,6 +19,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, Text
 import pandas as pd
 import os
+import threading
 
 from config_handler import ConfigHandler
 from annotation_loader import AnnotationLoader
@@ -75,7 +76,7 @@ class AnnotationTool:
         # Export menu: Export annotations
         self.export_handler = ExportHandler(self)
         self.menubar.add_cascade(label="Export", menu=self.export_menu)
-        self.export_menu.add_command(label="COCO Format", command=self.export_handler.coco_export)
+        self.export_menu.add_command(label="COCO Format", command=self.get_export_information)
         self.export_menu.add_command(label="Pascal VOC Format", command=self.export_handler.voc_export)
 
         # Help menu: Documentation and imprint
@@ -564,3 +565,109 @@ class AnnotationTool:
             self.annotation_loader = AnnotationLoader()
 
             messagebox.showinfo("Info", "A new annotation table is created.")
+
+    def get_export_information(self):
+        """
+        Opens a single popup window to gather all export metadata.
+        Returns:
+            dict | None: Dictionary with export information or None if cancelled.
+        """
+        fields = [
+            "name of dataset",
+            "version",
+            "year",
+            "contributors",
+            "description",
+            "date of creation"
+        ]
+
+        export_info = {}
+
+        # --- Popup window ---
+        popup = tk.Toplevel(self.root)
+        popup.title("Export Information")
+        popup.geometry("400x350")
+        popup.transient(self.root)
+        popup.grab_set()
+        popup.resizable(False, False)
+
+        tk.Label(popup, text="Please fill in the export metadata:",
+                font=("Arial", 11, "bold")).pack(pady=10)
+
+        # --- Frame for form entries ---
+        form_frame = ttk.Frame(popup)
+        form_frame.pack(fill=tk.BOTH, expand=True, padx=15)
+
+        entries = {}
+        for field in fields:
+            row = ttk.Frame(form_frame)
+            row.pack(fill=tk.X, pady=5)
+
+            label = ttk.Label(row, text=field + ":", width=18, anchor="w")
+            label.pack(side=tk.LEFT)
+
+            entry = ttk.Entry(row)
+            entry.pack(side=tk.RIGHT, expand=True, fill=tk.X)
+            entries[field] = entry
+
+        # --- Buttons ---
+        button_frame = ttk.Frame(popup)
+        button_frame.pack(pady=10)
+
+        def on_submit():
+            for field, widget in entries.items():
+                value = widget.get().strip()
+                if not value:
+                    messagebox.showwarning("Missing Field", f"Please fill in '{field}'.")
+                    return
+                export_info[field] = value
+            popup.destroy()
+            #print(export_info)
+            self.wait_for_export_gui(lambda: self.export_handler.coco_export(export_info))
+
+        def on_cancel():
+            messagebox.showinfo("Export cancelled", "Export process has been cancelled.")
+            popup.destroy()
+
+        ttk.Button(button_frame, text="Submit", command=on_submit).pack(side=tk.LEFT, padx=10)
+        ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side=tk.LEFT, padx=10)
+
+        popup.wait_window()  
+        return export_info if export_info else None
+
+
+    
+    def wait_for_export_gui(self, on_complete=None):
+        """
+        Displays a popup indicating that the export process is ongoing.
+        """
+        popup = tk.Toplevel()
+        popup.title("Export in progress")
+        popup.geometry("300x100")
+        popup.resizable(False, False)
+        popup.transient(self.root)
+        popup.grab_set()
+
+        tk.Label(popup, text="Please wait... Your Annotations are being exported to COCO format.").pack(pady=10)
+
+        spinner = ttk.Progressbar(popup, mode="indeterminate", length=250)
+        spinner.pack(pady=10)
+        spinner.start(10)
+
+        def worker():
+            try:
+                # Execute the callback function if provided
+                if on_complete:
+                    on_complete()
+                else:
+                    messagebox.showerror("Export error", "Export could not be finished.")
+            finally:
+                def cleanup():
+                    spinner.stop()
+                    if popup.winfo_exists():
+                        popup.destroy()
+
+                self.root.after(0, cleanup)
+
+        # Start the worker thread
+        threading.Thread(target=worker, daemon=True).start()
