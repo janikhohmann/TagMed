@@ -175,6 +175,9 @@ class ExportHandler:
                 hs = parse_list_cell(row.get('h'))
                 classes = parse_list_cell(row.get('class'))
 
+                # ==== MASKS SHOULD BE IMPLEMENTED HERE -> segmentation field for bboxes ====
+
+
                 for x, y, w, h, c in zip(xs, ys, ws, hs, classes):
                     if pd.isna(c):
                         continue
