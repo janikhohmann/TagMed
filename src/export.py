@@ -269,18 +269,6 @@ class ExportHandler:
         except Exception as e:
             print(f"[ERROR] Could not write COCO JSON: {e}")
 
-    def voc_export(self):
-        """
-        Export annotations to the specified export directory in Pascal VOC format.
-        """
-        self.export_dir = self.config.get("export_directory", "../exports")  # Directory to save exported files - should be configurable and absolute
-        try:
-            self.annotation_df = pd.read_csv(self.config.get("selected_anno_table_file"))  # DataFrame containing annotations
-        except Exception as e:
-            print(f"Error loading annotation data: {e}")
-            return
-
-        print("Starting VOC export process...")
 
 
 

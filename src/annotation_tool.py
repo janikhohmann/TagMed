@@ -77,7 +77,6 @@ class AnnotationTool:
         self.export_handler = ExportHandler(self)
         self.menubar.add_cascade(label="Export", menu=self.export_menu)
         self.export_menu.add_command(label="COCO Format", command=self.get_export_information)
-        self.export_menu.add_command(label="Pascal VOC Format", command=self.export_handler.voc_export)
 
         # Help menu: Documentation and imprint
         self.menubar.add_cascade(label="Other", menu=self.helpmenu)
