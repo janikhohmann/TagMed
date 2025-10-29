@@ -258,6 +258,10 @@ class GalleryNavigator:
         self.image_canvas = tk.Canvas(image_frame, bg="white", highlightthickness=0) 
         self.image_canvas.grid(row=1, column=0, sticky="nsew", padx=5, pady=(2, 5))
 
+        # Bind crosshair drawing to mouse motion and clear on leave
+        self.image_canvas.bind("<Motion>", self.draw_crosshair)
+        self.image_canvas.bind("<Leave>", lambda event: self.image_canvas.delete("crosshair_line"))
+
         self.setup_img_bottom_frame(image_tab)
 
         """ 
@@ -337,6 +341,10 @@ class GalleryNavigator:
 
         self.frame_canvas = tk.Canvas(frame_frame, bg="white", highlightthickness=0) 
         self.frame_canvas.grid(row=1, column=0, sticky="nsew")
+
+        # Bind crosshair drawing to mouse motion on the frame canvas as well
+        self.frame_canvas.bind("<Motion>", self.draw_crosshair)
+        self.frame_canvas.bind("<Leave>", lambda event: self.frame_canvas.delete("crosshair_line"))
 
         self.setup_video_bottom_frame(video_tab)
 
@@ -1112,5 +1120,62 @@ class GalleryNavigator:
 
         # Start the worker thread
         threading.Thread(target=worker, daemon=True).start()
+
+
+    def draw_crosshair(self,event):
+        """
+        Draws a crosshair on the image canvas at the mouse position.
+        
+        When the mouse moves over the image canvas, this function draws
+        horizontal and vertical lines intersecting at the cursor position,
+        creating a crosshair effect. Previous crosshair lines are removed
+        before drawing new ones to avoid clutter.
+        
+        Args:
+            event: Tkinter mouse motion event containing cursor coordinates
+        """
+
+        # Use the actual canvas that triggered the event (works for image_canvas and frame_canvas)
+        canvas = event.widget
+
+        # Remove existing crosshair lines on this canvas only
+        try:
+            canvas.delete("crosshair_line")
+        except Exception:
+            pass
+
+        # Determine which annotation-type variable to check depending on the canvas
+        annotation_type_var = None
+        try:
+            if hasattr(self, 'image_canvas') and canvas == self.image_canvas:
+                annotation_type_var = getattr(self, 'img_annotation_type', None)
+            elif hasattr(self, 'frame_canvas') and canvas == self.frame_canvas:
+                annotation_type_var = getattr(self, 'video_annotation_type', None)
+        except Exception:
+            annotation_type_var = None
+
+        # Resolve the actual string value (supports tk.StringVar or plain str)
+        ann_type = None
+        if isinstance(annotation_type_var, tk.StringVar):
+            try:
+                ann_type = annotation_type_var.get()
+            except Exception:
+                ann_type = None
+        elif isinstance(annotation_type_var, str):
+            ann_type = annotation_type_var
+
+        # Only draw crosshair when the current annotation type for this canvas is "Bounding Box"
+        if ann_type == "Bounding Box":
+            x = event.x
+            y = event.y
+            width = canvas.winfo_width()
+            height = canvas.winfo_height()
+
+            # Draw new crosshair lines
+            canvas.create_line(0, y, width, y, fill="red", dash=(4, 2), tags="crosshair_line")
+            canvas.create_line(x, 0, x, height, fill="red", dash=(4, 2), tags="crosshair_line")
+        else:
+            # Don't draw anything for other annotation types
+            return
 
 
