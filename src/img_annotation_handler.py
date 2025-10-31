@@ -556,6 +556,9 @@ class ImgAnnotationHandler:
         # remove any existing temporary bounding box by tag
         self.gui.image_canvas.delete("temp_boundingbox")
 
+        # remove crosshair lines when bounding box or polygon drawing starts
+        self.gui.image_canvas.bind(self.gui.image_canvas.delete("crosshair_line"))
+
         x, y = event.x, event.y  # Extract mouse position from event
         annotation_mode = self.gui.img_annotation_type.get()  # Get current annotation type
 

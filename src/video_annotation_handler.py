@@ -614,6 +614,9 @@ class VideoAnnotationHandler():
         # remove any existing temporary bounding box by tag
         self.gui.frame_canvas.delete("temp_boundingbox")
 
+        # remove crosshair lines when bounding box or polygon drawing starts
+        self.gui.frame_canvas.bind(self.gui.frame_canvas.delete("crosshair_line"))
+
         x, y = event.x, event.y  # Extract mouse position from event
         annotation_mode = self.gui.video_annotation_type.get()  # Get current video annotation type
 
