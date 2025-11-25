@@ -19,6 +19,7 @@ from config_handler import ConfigHandler
 from video_annotation_handler import VideoAnnotationHandler
 from mask_handler import MaskHandler
 from sam2_tracking import SAM2Tracking
+from sam3_tracking import SAM3Tracking
 from medsam2_tracking import MedSAM2Tracking
 
 class  VideoTracking:
@@ -26,6 +27,7 @@ class  VideoTracking:
         self.gui = gui
         self.video_annotation_handler = VideoAnnotationHandler(gui)
         self.sam2_tracking = SAM2Tracking(gui)
+        self.sam3_tracking = SAM3Tracking(gui)
         self.medsam2_tracking = MedSAM2Tracking(gui)
 
         self.mask_handler = MaskHandler(gui)
@@ -49,6 +51,15 @@ class  VideoTracking:
         
         if tracking_type == "Simple":
             self.simple_tracking_method()
+            
+        if tracking_type == "SAM3":
+            available = self.sam3_tracking.check_if_sam_3_is_available() # option to download different models
+
+            if available:
+                self.gui.wait_for_tracking_gui(on_complete=lambda: self.sam3_tracking.sam3_tracking_method())
+            else:
+                return
+            
 
         if tracking_type in ["SAM2 large", "SAM2 tiny"]:
             available = self.sam2_tracking.check_if_sam_2_is_available() # option to download different models
