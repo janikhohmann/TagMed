@@ -508,9 +508,9 @@ class SAM3Tracking:
                 self._cleanup_temp_directory(temp_video_dir)
                 return
             
-            # Process results for frames starting from current frame
+            # Process results for all frames (corrections should update entire video)
             frames_processed = 0
-            for frame_idx in range(current_frame_index, len(current_frames)):
+            for frame_idx in range(0, len(current_frames)):
                 if frame_idx in video_segments and ann_obj_id in video_segments[frame_idx]:
                     mask = video_segments[frame_idx][ann_obj_id]
                     next_img_id = current_frames[frame_idx].split(".")[0]

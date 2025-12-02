@@ -271,33 +271,53 @@ class SAM2Tracking:
         temp_video_dir = self._create_temp_video_directory_with_extractor(video_folder, current_frames)
 
         try:
-            # Reset any previous state and initialize for this video sequence
-            if hasattr(self, 'inference_state') and self.gui.inference_state is not None:
-                try:
-                    predictor.reset_state(self.gui.inference_state)
-                except:
-                    pass  # Ignore reset errors
-            
             resize_h, resize_w = self.image_size
-
-            # print(f"[INFO] Initializing SAM2 video predictor for temp video path: {temp_video_dir}")
-            # print(f"[DEBUG] GUI image size: {resize_w}x{resize_h}")
-            # print(f"[DEBUG] Number of frames: {len(current_frames)}")
-            # print(f"[DEBUG] Current frame index: {current_frame_index}")
             
-            try:
-                # print("[DEBUG] Calling predictor.init_state()...")
-                self.gui.inference_state = predictor.init_state(video_path=temp_video_dir)
-                # print("[DEBUG] init_state() completed successfully")
-            except Exception as e:
-                print(f"[ERROR] Failed to initialize inference state: {e}")
-                self._cleanup_temp_directory(temp_video_dir)
-                return
+            # Track prompts per video for multi-prompt support
+            video_id = f"{self.gui.patient_id}_{self.gui.selected_exam}_{self.gui.selected_video_index}"
+            
+            if not hasattr(self, 'sam2_video_prompts'):
+                self.sam2_video_prompts = {}  # video_id -> list of prompts
+            if not hasattr(self, 'sam2_temp_dirs'):
+                self.sam2_temp_dirs = {}  # video_id -> temp_dir path
+            
+            # Initialize temp dir tracking
+            if video_id not in self.sam2_temp_dirs:
+                # First time: keep the newly created temp_dir
+                self.sam2_temp_dirs[video_id] = temp_video_dir
+            else:
+                # Correction: old temp_dir might have symlinks, we need actual JPEGs
+                # Clean up the old one and use the new one with proper JPEGs
+                old_temp_dir = self.sam2_temp_dirs[video_id]
+                if old_temp_dir != temp_video_dir:
+                    print(f"[DEBUG] Cleaning up old temp directory: {old_temp_dir}")
+                    self._cleanup_temp_directory(old_temp_dir)
+                # Update to new temp_dir
+                self.sam2_temp_dirs[video_id] = temp_video_dir
+                print(f"[DEBUG] Using new temp directory: {temp_video_dir}")
+            
+            # Initialize prompt list for this video
+            if video_id not in self.sam2_video_prompts:
+                self.sam2_video_prompts[video_id] = []
+                print(f"[INFO] Initializing SAM2 for new video...")
+            else:
+                print(f"[INFO] Adding correction prompt to existing video (total prompts: {len(self.sam2_video_prompts[video_id]) + 1})...")
             
 
             # Check if Polygon or Bounding Box
             selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
             is_polygon = "Polygon" in selected_text
+
+            # SAM2 uses 1-based object IDs
+            ann_obj_id = selected_annotation_index + 1
+            
+            # Store current prompt information
+            current_prompt = {
+                'frame_idx': current_frame_index,
+                'ann_obj_id': ann_obj_id,
+                'is_polygon': is_polygon,
+                'coords': None  # Will be set below
+            }
 
             
 
@@ -348,24 +368,16 @@ class SAM2Tracking:
                         centroid_y = int(np.mean(points_array[:, 1]))
                     
                     # Add the click at the centroid
-                    ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
                     points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
                     labels = np.array([1], np.int32)  # Positive click
                     
-                    # print(f"[DEBUG] Adding points for polygon tracking: points={points}, labels={labels}, obj_id={ann_obj_id}")
-                    try:
-                        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                            inference_state=self.gui.inference_state,
-                            frame_idx=current_frame_index,
-                            obj_id=ann_obj_id,
-                            points=points,
-                            labels=labels,
-                        )
-                        # print(f"[DEBUG] add_new_points_or_box completed successfully for polygon")
-                    except Exception as e:
-                        print(f"[ERROR] Failed to add points for polygon tracking: {e}")
-                        self._cleanup_temp_directory(temp_video_dir)
-                        return
+                    # Store prompt for later (will be added after state init)
+                    current_prompt['coords'] = {
+                        'points': points,
+                        'labels': labels
+                    }
+                    
+                    print(f"[INFO] Stored polygon prompt on frame {current_frame_index} (obj_id={ann_obj_id})")
 
 
                 except IndexError:
@@ -415,30 +427,59 @@ class SAM2Tracking:
                         input_box = self.center_to_corners(scaled_x, scaled_y, scaled_w, scaled_h)
                     else:
                         input_box = self.center_to_corners(x, y, w, h)
-                    
-                    ann_obj_id = selected_annotation_index + 1  # Object IDs should be > 0
 
                     # print(f"[DEBUG] Starting tracking with bbox: x={x}, y={y}, w={w}, h={h}")
                     # print(f"[DEBUG] SAM2 input_box: {input_box}")
                     
-                    try:
-                        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                            inference_state=self.gui.inference_state,
-                            frame_idx=current_frame_index,
-                            obj_id=ann_obj_id,
-                            box=input_box,
-                        )
-                        # print(f"[DEBUG] add_new_points_or_box completed successfully for bounding box")
-                    except Exception as e:
-                        print(f"[ERROR] Failed to add bounding box for tracking: {e}")
-                        self._cleanup_temp_directory(temp_video_dir)
-                        return
+                    # Store prompt for later (will be added after state init)
+                    current_prompt['coords'] = {
+                        'box': input_box
+                    }
+                    
+                    print(f"[INFO] Stored bounding box prompt on frame {current_frame_index} (obj_id={ann_obj_id})")
 
 
                 except IndexError:
                     print(f"[ERROR] Bounding box index {selected_annotation_index} out of range.")
                     self._cleanup_temp_directory(temp_video_dir)
                     return
+
+            # Add current prompt to list
+            self.sam2_video_prompts[video_id].append(current_prompt)
+            
+            # Reinitialize inference state to include all prompts
+            # Use the stored temp_dir (not the potentially deleted one)
+            actual_temp_dir = self.sam2_temp_dirs[video_id]
+            print(f"[INFO] Initializing SAM2 state with {len(self.sam2_video_prompts[video_id])} prompt(s)...")
+            print(f"[DEBUG] Using temp directory: {actual_temp_dir}")
+            try:
+                self.gui.inference_state = predictor.init_state(video_path=actual_temp_dir)
+            except Exception as e:
+                print(f"[ERROR] Failed to initialize inference state: {e}")
+                self._cleanup_temp_directory(temp_video_dir)
+                return
+            
+            # Add all prompts to the fresh state
+            for prompt_idx, prompt in enumerate(self.sam2_video_prompts[video_id]):
+                print(f"[DEBUG] Adding prompt {prompt_idx + 1}/{len(self.sam2_video_prompts[video_id])} on frame {prompt['frame_idx']}")
+                
+                if prompt['is_polygon']:
+                    # Add polygon points
+                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                        inference_state=self.gui.inference_state,
+                        frame_idx=prompt['frame_idx'],
+                        obj_id=prompt['ann_obj_id'],
+                        points=prompt['coords']['points'],
+                        labels=prompt['coords']['labels'],
+                    )
+                else:
+                    # Add bounding box
+                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                        inference_state=self.gui.inference_state,
+                        frame_idx=prompt['frame_idx'],
+                        obj_id=prompt['ann_obj_id'],
+                        box=prompt['coords']['box'],
+                    )
 
             # ===== PROPAGATE THROUGH VIDEO =====
             print("[INFO] Propagating annotations through video with SAM2...")
@@ -464,9 +505,9 @@ class SAM2Tracking:
                 traceback.print_exc()
                 self._cleanup_temp_directory(temp_video_dir)
                 return
-            # Process results for frames starting from current frame
+            # Process results for all frames (corrections should update entire video)
             frames_processed = 0
-            for frame_idx in range(current_frame_index, len(current_frames)):
+            for frame_idx in range(0, len(current_frames)):
                 if frame_idx in video_segments and ann_obj_id in video_segments[frame_idx]:
                     mask = video_segments[frame_idx][ann_obj_id]
                     next_img_id = current_frames[frame_idx].split(".")[0]
@@ -593,8 +634,9 @@ class SAM2Tracking:
             import traceback
             traceback.print_exc()
         finally:
-            # Always cleanup temporary directory
-            self._cleanup_temp_directory(temp_video_dir)
+            # Keep temp_dir for future corrections - it will be reused
+            # Only cleanup when user changes videos or closes the application
+            pass
     
 
     def _get_frame_path(self, video_folder, frame_filename):
@@ -622,19 +664,20 @@ class SAM2Tracking:
 
     def _create_temp_video_directory_with_extractor(self, video_folder, current_frames):
         """
-        Creates a temporary directory with symlinks to video frames using the VideoFrameExtractor.
+        Creates a temporary directory with JPEG copies of video frames.
         SAM2 expects frames with names like 00000.jpg, 00001.jpg, etc.
         """
         import tempfile
+        import cv2
         
         # Create temporary directory
         temp_dir = tempfile.mkdtemp(prefix="sam2_video_")
         print(f"[INFO] Created temporary directory: {temp_dir}")
         
         try:
-            # Create symlinks for each frame with the expected naming format
+            # Create JPEG copies for each frame with the expected naming format
             for i, frame_name in enumerate(current_frames):
-                # Verwende VideoFrameExtractor für korrekten Pfad
+                # Use VideoFrameExtractor for correct path
                 source_path = self._get_frame_path(video_folder, frame_name)
                 
                 # SAM2 expects frame names like 00000.jpg, 00001.jpg, etc.
@@ -642,9 +685,12 @@ class SAM2Tracking:
                 target_path = os.path.join(temp_dir, target_name)
                 
                 if os.path.exists(source_path):
-                    # Create symlink (faster than copying)
-                    os.symlink(source_path, target_path)
-                    #print(f"[DEBUG] Created symlink: {source_path} -> {target_path}")
+                    # Read and save as JPEG (SAM2 requires actual JPEG files, not PNG symlinks)
+                    frame = cv2.imread(source_path)
+                    if frame is not None:
+                        cv2.imwrite(target_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    else:
+                        print(f"[WARN] Could not read frame: {source_path}")
                 else:
                     print(f"[WARN] Source frame not found: {source_path}")
             
