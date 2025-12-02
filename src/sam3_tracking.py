@@ -238,26 +238,44 @@ class SAM3Tracking:
         try:
             resize_h, resize_w = self.image_size
 
-            # SAM3 uses init_state like SAM2 (SAM2-compatible API)
-            print(f"[INFO] Initializing SAM3 Inference State...")
+            # Check if we have an existing inference state for this video
+            # This allows corrections/refinements without reinitializing
+            video_id = f"{self.gui.patient_id}_{self.gui.selected_exam}_{self.gui.selected_video_index}"
             
-            try:
-                # Use temp directory with numeric frame names
-                video_path = temp_video_dir
+            if not hasattr(self, 'sam3_inference_states'):
+                self.sam3_inference_states = {}
+            
+            if video_id not in self.sam3_inference_states:
+                # SAM3 uses init_state like SAM2 (SAM2-compatible API)
+                print(f"[INFO] Initializing SAM3 Inference State for new video...")
                 
-                # Initialize inference state (like SAM2)
-                inference_state = predictor.init_state(video_path=video_path)
-                
-                # Clear any previous annotations
-                predictor.clear_all_points_in_video(inference_state)
-                
-                print("[DEBUG] SAM3 inference_state successfully initialized")
-            except Exception as e:
-                print(f"[ERROR] Initializing SAM3 Inference State failed: {e}")
-                import traceback
-                traceback.print_exc()
+                try:
+                    # Use temp directory with numeric frame names
+                    video_path = temp_video_dir
+                    
+                    # Initialize inference state (like SAM2)
+                    inference_state = predictor.init_state(video_path=video_path)
+                    
+                    # Store for reuse
+                    self.sam3_inference_states[video_id] = {
+                        'state': inference_state,
+                        'temp_dir': temp_video_dir
+                    }
+                    
+                    print("[DEBUG] SAM3 inference_state successfully initialized")
+                except Exception as e:
+                    print(f"[ERROR] Initializing SAM3 Inference State failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self._cleanup_temp_directory(temp_video_dir)
+                    return
+            else:
+                # Reuse existing inference state for corrections
+                print(f"[INFO] Reusing existing SAM3 Inference State for corrections...")
+                inference_state = self.sam3_inference_states[video_id]['state']
+                # Cleanup new temp dir since we're using the old one
                 self._cleanup_temp_directory(temp_video_dir)
-                return
+                temp_video_dir = self.sam3_inference_states[video_id]['temp_dir']
             
             # Check if Polygon or Bounding Box
             selected_text = self.gui.video_annotation_listbox.get(selected_annotation_index)
@@ -324,10 +342,15 @@ class SAM3Tracking:
                         
                         # Convert mask to torch tensor
                         # SAM3 expects 2D mask with shape (H, W), not (1, H, W)
-                        mask_tensor = torch.from_numpy(mask).float()
+                        # Use same dtype as model (BFloat16 on CUDA with Ampere+)
+                        device = "cuda" if torch.cuda.is_available() else "cpu"
+                        if device == "cuda" and torch.cuda.get_device_properties(0).major >= 8:
+                            mask_tensor = torch.from_numpy(mask).to(device=device, dtype=torch.bfloat16)
+                        else:
+                            mask_tensor = torch.from_numpy(mask).float().to(device)
                         
                         print(f"[DEBUG] Adding mask prompt from polygon")
-                        print(f"[DEBUG] Mask shape: {mask_tensor.shape}, non-zero pixels: {(mask_tensor > 0).sum().item()}")
+                        print(f"[DEBUG] Mask shape: {mask_tensor.shape}, dtype: {mask_tensor.dtype}, non-zero pixels: {(mask_tensor > 0).sum().item()}")
                         
                         # Use add_new_mask like in the notebook
                         _, out_obj_ids, low_res_masks, video_res_masks = predictor.add_new_mask(
@@ -396,29 +419,51 @@ class SAM3Tracking:
                             x_max / original_width,
                             y_max / original_height
                         ]], dtype=np.float32)
+                        
+                        # Convert to tensor immediately with correct device
+                        import torch
+                        device = "cuda" if torch.cuda.is_available() else "cpu"
+                        rel_box = torch.from_numpy(rel_box).to(device=device, dtype=torch.float32)
                     else:
                         # Fallback: normalize by GUI size
                         x_min = x - w / 2
                         y_min = y - h / 2
                         x_max = x + w / 2
                         y_max = y + h / 2
-                        rel_box = np.array([[
+                        rel_box_np = np.array([[
                             x_min / resize_w,
                             y_min / resize_h,
                             x_max / resize_w,
                             y_max / resize_h
                         ]], dtype=np.float32)
+                        
+                        # Convert to tensor immediately with correct device
+                        import torch
+                        device = "cuda" if torch.cuda.is_available() else "cpu"
+                        rel_box = torch.from_numpy(rel_box_np).to(device=device, dtype=torch.float32)
 
                     try:
                         # SAM3 add_new_points_or_box (SAM2-compatible API)
-                        print(f"[DEBUG] Adding box prompt (BBox): {rel_box[0]}")
+                        import torch
                         
-                        # Use add_new_points_or_box like in the notebook
+                        print(f"[DEBUG] Adding box prompt (BBox): {rel_box[0].cpu().numpy()}")
+                        print(f"[DEBUG] Box device: {rel_box.device}, dtype: {rel_box.dtype}")
+                        
+                        # Workaround for SAM3 bug: provide empty points on same device as box
+                        # This prevents device mismatch when concatenating box_coords with points
+                        device = rel_box.device
+                        empty_points = torch.zeros(0, 2, dtype=torch.float32, device=device)
+                        empty_labels = torch.zeros(0, dtype=torch.int32, device=device)
+                        
+                        # Important: normalize_coords=False because our box is already normalized to [0, 1]
                         _, out_obj_ids, low_res_masks, video_res_masks = predictor.add_new_points_or_box(
                             inference_state=inference_state,
                             frame_idx=ann_frame_idx,
                             obj_id=ann_obj_id,
+                            points=empty_points,  # Empty points on correct device
+                            labels=empty_labels,   # Empty labels on correct device
                             box=rel_box,
+                            normalize_coords=False,  # Box is already normalized!
                         )
                         
                         print(f"[DEBUG] Bounding Box prompt successfully added - Object IDs: {out_obj_ids}")
