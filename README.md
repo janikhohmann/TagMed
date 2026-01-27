@@ -19,6 +19,7 @@ TagMed is designed to facilitate the annotation of sensitive ultrasound images a
 <img src="resources/images/TagMed_graphical_abstract.png">
 
 **Graphical Overview of the TagMed Annotation Framework.**
+
 **(A)** Liver ultrasound videos from four diagnostic entities (Hepatocellular carcinoma (HCC),
 Metastasis (MET), Focal nodular hyperplasia (FNH), Hemangioma (HEM)) were imported
 into TagMed. Every 10th frame was manually annotated by two expert sonographers using
