@@ -1,5 +1,5 @@
 # TagMed
-<img src="resources/images/TagMed_logo.png"> 
+<img src="resources/images/TagMed_LOGO.png"> 
 
 
 <div align="center">
@@ -16,14 +16,14 @@
 ## Overview
 TagMed is designed to facilitate the annotation of sensitive ultrasound images and corresponding medical reports for computer vision projects. 
 
-*INSERT GRAPHICAL ABSTRACT HERE*
+<img src="resources/images/TagMed_graphical_abstract.png"> 
 
 ## Features
 Medical image annotation, particularly in ultrasound, requires precision, efficiency, and a secure workflow. This tool aims to:
 
-- Provide a simple and intuitive interface for annotating medical data with bounding boxes, polygons and class assignment.
+- Provides a simple and intuitive interface for annotating medical data with bounding boxes, polygons and class assignment.
 - Allow creation and classification of bounding boxes on image frames.
-- Support video annotation with frame navigation and object tracking using the automated assistance of [SAM2](https://github.com/facebookresearch/sam2) and [MedSAM2](https://github.com/bowang-lab/MedSAM2).
+- Support video annotation with frame navigation and object tracking using the automated assistance of [SAM2](https://github.com/facebookresearch/sam2), [MedSAM2](https://github.com/bowang-lab/MedSAM2) and [SAM3](https://github.com/facebookresearch/sam3).
 - Designed to handle sensitive medical data locally.
     
 ## Quick Start
@@ -56,10 +56,9 @@ python main.py
 2. Select patient and examination
 3. Choose annotation type (bounding box or polygon)
 4. Annotate your images/videos
-5. Use SAM2/MedSAM2 tracking for automated propagation across video frames
+5. Use interactive segmentation models for tracking and automated propagation across video frames
 6. Export annotations for your computer vision projects
 
-*INSERT SCREENSHOTS HERE*
 
 ## File Structure
 
@@ -125,13 +124,16 @@ MedSAM2
     year={2025}
 }
 ```
-EfficientTAM
+SAM3
 ```
-@article{xiong2024efficienttam,
-    title={Efficient Track Anything},
-    author={Yunyang Xiong, Chong Zhou, Xiaoyu Xiang, Lemeng Wu, Chenchen Zhu, Zechun Liu, Saksham Suri, Balakrishnan Varadarajan, Ramya Akula, Forrest Iandola, Raghuraman Krishnamoorthi, Bilge Soran, Vikas Chandra},
-    journal={preprint arXiv:2411.18933},
-    year={2024}
+@misc{carion2025sam3segmentconcepts,
+      title={SAM 3: Segment Anything with Concepts},
+      author={Nicolas Carion and Laura Gustafson and Yuan-Ting Hu and Shoubhik Debnath and Ronghang Hu and Didac Suris and Chaitanya Ryali and Kalyan Vasudev Alwala and Haitham Khedr and Andrew Huang and Jie Lei and Tengyu Ma and Baishan Guo and Arpit Kalla and Markus Marks and Joseph Greer and Meng Wang and Peize Sun and Roman Rädle and Triantafyllos Afouras and Effrosyni Mavroudi and Katherine Xu and Tsung-Han Wu and Yu Zhou and Liliane Momeni and Rishi Hazra and Shuangrui Ding and Sagar Vaze and Francois Porcher and Feng Li and Siyuan Li and Aishwarya Kamath and Ho Kei Cheng and Piotr Dollár and Nikhila Ravi and Kate Saenko and Pengchuan Zhang and Christoph Feichtenhofer},
+      year={2025},
+      eprint={2511.16719},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2511.16719},
 }
 ```
 

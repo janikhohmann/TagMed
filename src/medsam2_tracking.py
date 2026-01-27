@@ -510,9 +510,29 @@ class MedSAM2Tracking:
                     if mask.ndim > 2:
                         mask = mask.squeeze()
                     
-                    # Skip empty masks
+                    # Skip empty masks and delete existing mask file if present
                     if mask.sum() == 0:
-                        print(f"[INFO] Empty mask for frame {next_img_id}")
+                        print(f"[INFO] Empty mask for frame {next_img_id} - removing existing mask if present")
+                        
+                        # Find and delete existing mask file
+                        match_next = self.gui.all_annotations['img_ID'].astype(str).str.strip() == next_img_id
+                        if match_next.any():
+                            next_df_index = self.gui.all_annotations[match_next].index[0]
+                            existing_masks = self._safe_parse_list(self.gui.all_annotations.at[next_df_index, 'masks'])
+                            
+                            if selected_annotation_index < len(existing_masks):
+                                mask_path = existing_masks[selected_annotation_index]
+                                if mask_path and os.path.exists(mask_path):
+                                    try:
+                                        os.remove(mask_path)
+                                        print(f"[INFO] Deleted mask file: {mask_path}")
+                                    except Exception as e:
+                                        print(f"[WARN] Could not delete mask file {mask_path}: {e}")
+                                
+                                # Remove mask from list
+                                existing_masks[selected_annotation_index] = None
+                                self.gui.all_annotations.at[next_df_index, 'masks'] = existing_masks
+                        
                         continue
 
                     # Scale mask to GUI size for consistency with annotations
