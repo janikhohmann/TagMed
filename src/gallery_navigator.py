@@ -168,6 +168,11 @@ class GalleryNavigator:
         self.patient_window.bind("<Control-Button-4>", self.on_zoom)  # Linux scroll up
         self.patient_window.bind("<Control-Button-5>", self.on_zoom)  # Linux scroll down
         
+        # Crosshair control with Ctrl key
+        self.patient_window.bind("<KeyPress-Control_L>", self.hide_crosshair)
+        self.patient_window.bind("<KeyPress-Control_R>", self.hide_crosshair)
+        self.patient_window.bind("<KeyRelease-Control_L>", self.show_crosshair)
+        self.patient_window.bind("<KeyRelease-Control_R>", self.show_crosshair)
 
 
         # get exams for the patient
@@ -1165,6 +1170,28 @@ class GalleryNavigator:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    def hide_crosshair(self, event):
+        """
+        Hides the crosshair when Ctrl key is pressed.
+        
+        Args:
+            event: Keyboard event
+        """
+        if hasattr(self, 'image_canvas'):
+            self.image_canvas.delete("crosshair_line")
+        if hasattr(self, 'frame_canvas'):
+            self.frame_canvas.delete("crosshair_line")
+    
+    def show_crosshair(self, event):
+        """
+        Re-enables crosshair drawing when Ctrl key is released.
+        
+        Args:
+            event: Keyboard event
+        """
+        # Crosshair will be redrawn on next mouse motion
+        pass
+
     def draw_crosshair(self,event):
         """
         Draws a crosshair on the image canvas at the mouse position.
@@ -1401,6 +1428,9 @@ class GalleryNavigator:
                 self.pan_offset_x,
                 self.pan_offset_y
             )
+        
+        # Redraw annotations with new pan offset
+        self.redraw_annotations_with_zoom()
 
     def end_pan(self, event):
         """

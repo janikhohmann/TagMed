@@ -977,7 +977,10 @@ class ImgAnnotationHandler:
                 self.gui.all_annotations.at[df_index, 'bb_annotype'] = bbox_annotype_list
 
                 if len(coords) == 4:
-                    x1, y1, x2, y2 = coords
+                    # Canvas coordinates need to be transformed back to image coordinates
+                    canvas_x1, canvas_y1, canvas_x2, canvas_y2 = coords
+                    x1, y1 = self.gui.inverse_transform_coordinates(canvas_x1, canvas_y1)
+                    x2, y2 = self.gui.inverse_transform_coordinates(canvas_x2, canvas_y2)
                     self.rect_start = (x1, y1)
                     self.rect_end = (x2, y2)
                     self.create_resize_handles()  
