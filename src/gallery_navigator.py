@@ -512,6 +512,7 @@ class GalleryNavigator:
         self.current_frames = current_frames
         self.current_frame_index = 0
         self.current_frame_id = current_frames[self.current_frame_index].split(".")[0].strip() if current_frames else None
+        self.video_slider.set(0) # set slider back to first position
 
         self.video_annotation_handler.display_current_frame()
 
