@@ -1301,7 +1301,7 @@ class GalleryNavigator:
         
         Zooms in or out on the image canvas while keeping coordinates
         relative to the original image unchanged. Limits zoom range
-        between 100% (1.0) and 200% (2.0).
+        between 100% (1.0) and 300% (3.0).
         
         Args:
             event: Mouse wheel event with delta information
@@ -1564,8 +1564,8 @@ class GalleryNavigator:
         # Calculate new zoom level
         new_zoom = self.video_zoom_level * zoom_factor
         
-        # Limit zoom range: 100% to 200%
-        new_zoom = max(1.0, min(2.0, new_zoom))
+        # Limit zoom range: 100% to 300%
+        new_zoom = max(1.0, min(3.0, new_zoom))
         
         if new_zoom == self.video_zoom_level:
             return  # No change needed
