@@ -882,6 +882,10 @@ class GalleryNavigator:
                                 command=lambda: self.video_slider.set(self.video_slider.get() - 1))
         left_button.pack(side="left", padx=5)
 
+        self.play_stop_button = tk.Button(button_row, text="▶", width=6,
+                                command=self.toggle_play_stop)
+        self.play_stop_button.pack(side="left", padx=5)
+
         right_button = tk.Button(button_row, text="→", width=4,
                                 command=lambda: self.video_slider.set(self.video_slider.get() + 1))
         right_button.pack(side="left", padx=5)
@@ -1485,6 +1489,26 @@ class GalleryNavigator:
         """
         self.is_panning = False
         self.image_canvas.config(cursor="")  # Reset cursor
+
+    def toggle_play_stop(self):
+        """
+        Toggles between play and stop for video playback.
+        
+        Changes button appearance and functionality based on playback state:
+        - If not playing: Shows ▶ (play), starts video playback
+        - If playing: Shows ⏸ (pause), stops video playback
+        """
+        if not hasattr(self.video_annotation_handler, 'is_playing'):
+            self.video_annotation_handler.is_playing = False
+        
+        if self.video_annotation_handler.is_playing:
+            # Currently playing - stop it
+            self.video_annotation_handler.stop_video()
+            self.play_stop_button.config(text="▶")
+        else:
+            # Not playing - start it
+            self.video_annotation_handler.play_video()
+            self.play_stop_button.config(text="⏸")
 
     def transform_coordinates(self, image_x, image_y):
         """

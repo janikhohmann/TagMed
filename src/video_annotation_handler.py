@@ -1573,3 +1573,69 @@ class VideoAnnotationHandler():
         self.redraw_polygon()
 
 
+    def play_video(self):
+        """
+        Play the selected video starting from the current frame.
+        
+        Plays through video frames sequentially starting from the current frame position,
+        displaying each frame with a 30ms delay (approximately 33 fps). The playback
+        continues until the end of the video or until stop_video() is called.
+        
+        Uses tkinter's after() method for non-blocking frame updates, allowing
+        the GUI to remain responsive during playback.
+        
+        Side Effects:
+            - Sets self.is_playing flag to True
+            - Updates current_frame_index progressively
+            - Calls display_current_frame() for each frame
+            - Updates frame slider position
+        """
+        # Set playback flag
+        self.is_playing = True
+        
+        # Start playback from current frame
+        self._play_next_frame()
+    
+    def _play_next_frame(self):
+        """
+        Internal method to display the next frame during video playback.
+        
+        This method is called recursively via tkinter's after() to create
+        smooth video playback. It advances to the next frame, displays it,
+        and schedules the next frame update.
+        """
+        # Check if playback should continue
+        if not self.is_playing:
+            return
+        
+        # Check if we've reached the end of the video
+        if self.gui.current_frame_index >= len(self.gui.current_frames) - 1:
+            self.stop_video()
+            return
+        
+        # Advance to next frame
+        self.gui.current_frame_index += 1
+        
+        # Update slider position
+        self.gui.video_slider.set(self.gui.current_frame_index)
+        
+        # Display the current frame with annotations
+        self.display_current_frame()
+        
+        # Schedule next frame (50ms delay = ~20 fps)
+        self.gui.root.after(50, self._play_next_frame)
+    
+    def stop_video(self):
+        """
+        Stop video playback.
+        
+        Halts the video playback loop by setting the is_playing flag to False.
+        This can be called manually or automatically when reaching the end of the video.
+        Also resets the play/stop button to show play icon.
+        """
+        self.is_playing = False
+        
+        # Reset button to play icon
+        if hasattr(self.gui, 'play_stop_button'):
+            self.gui.play_stop_button.config(text="▶")
+
