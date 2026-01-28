@@ -1281,6 +1281,12 @@ class VideoAnnotationHandler():
             - Updates internal frame count tracking
             - Validates DataFrame structure and handles missing columns
         """
+        # Save current selection before clearing
+        current_selection = self.gui.video_listbox.curselection()
+        selected_video = None
+        if current_selection:
+            selected_video = self.gui.video_listbox.get(current_selection[0])
+        
         # Clear existing video listbox entries
         self.gui.video_listbox.delete(0, tk.END)
 
@@ -1336,12 +1342,20 @@ class VideoAnnotationHandler():
             # Apply progressive color coding based on annotation completion
             if annotated_frames == 0:
                 color = '#fcd4d4'  # Red - no annotations
-            elif annotated_frames < total_frames:
-                color = '#fcf3d4'  # Orange - partially annotated
+            # elif annotated_frames < total_frames-1:
+            #     color = '#fcf3d4'  # Orange - partially annotated
             else:
                 color = '#d4fcd4'  # Green - fully annotated
 
             self.gui.video_listbox.itemconfig(index, {'bg': color})
+        
+        # Restore selection if it existed
+        if selected_video:
+            for i in range(self.gui.video_listbox.size()):
+                if self.gui.video_listbox.get(i) == selected_video:
+                    self.gui.video_listbox.selection_set(i)
+                    self.gui.video_listbox.see(i)  # Scroll to ensure it's visible
+                    break
 
     def get_number_of_frames_for_videos(self):
         """

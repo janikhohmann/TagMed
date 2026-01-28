@@ -159,7 +159,7 @@ class GalleryNavigator:
         # Creating a new window
         patient_window = tk.Toplevel(self.root)
         patient_window.title(f"Annotation Gallery for {patient_id}")
-        patient_window.geometry("1400x900")
+        patient_window.geometry("1450x900")
         self.patient_window = patient_window
 
         self.patient_id = patient_id
@@ -235,7 +235,7 @@ class GalleryNavigator:
         scrollbar_img.pack(side="right", fill="y")
 
         # Listbox to display images
-        self.image_listbox = tk.Listbox(image_list_frame, yscrollcommand=scrollbar_img.set)
+        self.image_listbox = tk.Listbox(image_list_frame, yscrollcommand=scrollbar_img.set, exportselection=False, selectbackground='#4a90d9')
         self.image_listbox.pack(fill="both", expand=True)
 
         # Link the scrollbar to the listbox
@@ -340,7 +340,7 @@ class GalleryNavigator:
         scrollbar_video.pack(side="right", fill="y")
 
         # Listbox to display videos
-        self.video_listbox = tk.Listbox(video_list_frame, yscrollcommand=scrollbar_video.set)
+        self.video_listbox = tk.Listbox(video_list_frame, yscrollcommand=scrollbar_video.set, exportselection=False, selectbackground='#4a90d9')
         self.video_listbox.pack(fill="both", expand=True)
 
         # Link the scrollbar to the listbox
@@ -399,7 +399,7 @@ class GalleryNavigator:
             text="100%",
             bg=frame_frame.cget("bg"),
             font=("Arial", 11, "bold"),
-            fg="blue"
+            fg="black"
             )
         self.zoom_label_video.grid(row=0, column=1, sticky="e", padx=(10, 0)) 
 
@@ -489,6 +489,7 @@ class GalleryNavigator:
         self.update_zoom_label()
 
         selection = self.image_listbox.curselection()
+        self.selected_image = selection
         if not selection:
             return 
 

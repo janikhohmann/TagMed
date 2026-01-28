@@ -1297,6 +1297,14 @@ class ImgAnnotationHandler:
             else:
                 self.gui.image_listbox.itemconfig(index, {'bg': '#fcd4d4'})  # Red - not annotated
 
+        # Restore selection if it existed
+        if hasattr(self.gui, 'selected_image_index') and self.gui.selected_image_index:
+            for i in range(self.gui.image_listbox.size()):
+                if self.gui.image_listbox.get(i) == self.gui.selected_image_index:
+                    self.gui.image_listbox.selection_set(i)
+                    self.gui.image_listbox.see(i)  # Scroll to ensure it's visible
+                    break
+
     def redraw_polygon(self):
         """
         Redraw polygon outline connecting all current polygon points.
