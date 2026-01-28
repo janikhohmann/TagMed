@@ -112,6 +112,14 @@ class GalleryNavigator:
         self.is_panning = False
         self.pan_start_x = 0
         self.pan_start_y = 0
+        
+        # Zoom and Pan variables for video frame canvas
+        self.video_zoom_level = 1.0  # 1.0 = 100%, range: 1.0 to 2.0
+        self.video_pan_offset_x = 0
+        self.video_pan_offset_y = 0
+        self.is_video_panning = False
+        self.video_pan_start_x = 0
+        self.video_pan_start_y = 0
 
     def refresh_configuration(self):
         """
@@ -363,6 +371,12 @@ class GalleryNavigator:
         frame_frame.grid_rowconfigure(1, weight=1)
         frame_frame.grid_columnconfigure(0, weight=1)
 
+        # Create header frame for video name and zoom percentage
+        video_header_frame = tk.Frame(frame_frame, bg=frame_frame.cget("bg"))
+        video_header_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2))
+        video_header_frame.grid_columnconfigure(0, weight=1)
+        video_header_frame.grid_columnconfigure(1, weight=0)
+
         # load the selected video name for header text
         try:
             header_text = self.selected_video_index.split(".")[0]
@@ -372,12 +386,22 @@ class GalleryNavigator:
              header_text = self.selected_video_index 
 
         self.header_label_video = tk.Label(
-            frame_frame,
+            video_header_frame,
             text=header_text,
             bg=frame_frame.cget("bg"),
             font=("Arial", 11, "bold")
             )
-        self.header_label_video.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2)) 
+        self.header_label_video.grid(row=0, column=0, sticky="w")
+        
+        # Zoom percentage label for video
+        self.zoom_label_video = tk.Label(
+            video_header_frame,
+            text="100%",
+            bg=frame_frame.cget("bg"),
+            font=("Arial", 11, "bold"),
+            fg="blue"
+            )
+        self.zoom_label_video.grid(row=0, column=1, sticky="e", padx=(10, 0)) 
 
         self.frame_canvas = tk.Canvas(frame_frame, bg="white", highlightthickness=0) 
         self.frame_canvas.grid(row=1, column=0, sticky="nsew")
@@ -385,6 +409,16 @@ class GalleryNavigator:
         # Bind crosshair drawing to mouse motion on the frame canvas as well
         self.frame_canvas.bind("<Motion>", self.draw_crosshair)
         self.frame_canvas.bind("<Leave>", lambda event: self.frame_canvas.delete("crosshair_line"))
+        
+        # Bind zoom functionality to frame canvas (Control + Mouse Wheel)
+        self.frame_canvas.bind("<Control-MouseWheel>", self.on_video_zoom)
+        self.frame_canvas.bind("<Control-Button-4>", self.on_video_zoom)  # Linux scroll up
+        self.frame_canvas.bind("<Control-Button-5>", self.on_video_zoom)  # Linux scroll down
+        
+        # Bind pan functionality to frame canvas
+        self.frame_canvas.bind("<Control-ButtonPress-1>", self.start_video_pan)
+        self.frame_canvas.bind("<Control-B1-Motion>", self.pan_video)
+        self.frame_canvas.bind("<Control-ButtonRelease-1>", self.end_video_pan)
 
         self.setup_video_bottom_frame(video_tab)
 
@@ -560,6 +594,12 @@ class GalleryNavigator:
         self.current_frame_index = 0
         self.current_frame_id = current_frames[self.current_frame_index].split(".")[0].strip() if current_frames else None
         self.video_slider.set(0) # set slider back to first position
+        
+        # Reset zoom and pan when selecting new video
+        self.video_zoom_level = 1.0
+        self.video_pan_offset_x = 0
+        self.video_pan_offset_y = 0
+        self.update_video_zoom_label()
 
         self.video_annotation_handler.display_current_frame()
 
@@ -1378,6 +1418,10 @@ class GalleryNavigator:
         if self.selected_image_index:
             base_name = self.selected_image_index.split(".")[0]
             self.img_annotation_handler.load_annotations_for_image(base_name)
+        
+        # Reload masks with zoom and pan transformation
+        if self.masks_visible.get() and hasattr(self, 'mask_handler'):
+            self.mask_handler.load_masks_for_image()
 
     def update_zoom_label(self):
         """
@@ -1477,6 +1521,163 @@ class GalleryNavigator:
         """
         image_x = (canvas_x - self.pan_offset_x) / self.zoom_level
         image_y = (canvas_y - self.pan_offset_y) / self.zoom_level
+        return image_x, image_y
+    
+    # ========== Video Zoom and Pan Methods ==========
+    
+    def on_video_zoom(self, event):
+        """
+        Handles zoom events for video frame canvas.
+        """
+        # Determine zoom direction
+        if event.num == 4 or event.delta > 0:  # Scroll up - zoom in
+            zoom_factor = 1.1
+        elif event.num == 5 or event.delta < 0:  # Scroll down - zoom out
+            zoom_factor = 0.9
+        else:
+            return
+
+        # Calculate new zoom level
+        new_zoom = self.video_zoom_level * zoom_factor
+        
+        # Limit zoom range: 100% to 200%
+        new_zoom = max(1.0, min(2.0, new_zoom))
+        
+        if new_zoom == self.video_zoom_level:
+            return  # No change needed
+        
+        self.video_zoom_level = new_zoom
+        
+        # Reset pan when zooming out to 100%
+        if self.video_zoom_level == 1.0:
+            self.video_pan_offset_x = 0
+            self.video_pan_offset_y = 0
+        
+        self.update_video_display()
+        self.update_video_zoom_label()
+    
+    def update_video_display(self):
+        """
+        Updates the video frame display with current zoom and pan settings.
+        """
+        if not hasattr(self, 'original_video_frame'):
+            return
+            
+        # Calculate new image size based on zoom
+        width, height = self.image_size
+        new_width = int(width * self.video_zoom_level)
+        new_height = int(height * self.video_zoom_level)
+        
+        # Resize frame
+        zoomed_frame = self.original_video_frame.resize(
+            (new_width, new_height), 
+            Image.Resampling.LANCZOS
+        )
+        
+        self.tk_frame = ImageTk.PhotoImage(zoomed_frame)
+        
+        # Update canvas with pan offset
+        if hasattr(self.video_annotation_handler, 'frame_on_canvas'):
+            self.frame_canvas.coords(
+                self.video_annotation_handler.frame_on_canvas, 
+                self.video_pan_offset_x, 
+                self.video_pan_offset_y
+            )
+            self.frame_canvas.itemconfig(self.video_annotation_handler.frame_on_canvas, image=self.tk_frame)
+        
+        # Redraw all annotations with new coordinates
+        self.redraw_video_annotations_with_zoom()
+    
+    def redraw_video_annotations_with_zoom(self):
+        """
+        Redraws all video frame annotations with zoom and pan transformation.
+        """
+        if not hasattr(self, 'video_annotation_handler'):
+            return
+            
+        # Clear visual annotations (but keep data)
+        for rect_id in self.video_annotation_handler.drawn_rect_ids:
+            try:
+                self.frame_canvas.delete(rect_id)
+            except:
+                pass
+        self.video_annotation_handler.drawn_rect_ids.clear()
+        
+        # Reload annotations (will use transform_video_coordinates)
+        self.video_annotation_handler.load_annotations_for_frame()
+        
+        # Reload masks with zoom and pan transformation
+        if self.masks_visible.get() and hasattr(self, 'mask_handler'):
+            self.mask_handler.load_masks_for_frame()
+    
+    def update_video_zoom_label(self):
+        """
+        Updates the video zoom percentage label display.
+        """
+        if hasattr(self, 'zoom_label_video'):
+            percentage = int(self.video_zoom_level * 100)
+            self.zoom_label_video.config(text=f"{percentage}%")
+    
+    def start_video_pan(self, event):
+        """
+        Starts panning mode for video frame canvas.
+        """
+        self.is_video_panning = True
+        self.video_pan_start_x = event.x
+        self.video_pan_start_y = event.y
+        self.frame_canvas.config(cursor="fleur")
+    
+    def pan_video(self, event):
+        """
+        Handles video frame panning during Ctrl+Drag.
+        """
+        if not self.is_video_panning:
+            return
+            
+        # Calculate movement delta
+        dx = event.x - self.video_pan_start_x
+        dy = event.y - self.video_pan_start_y
+        
+        # Update pan offsets
+        self.video_pan_offset_x += dx
+        self.video_pan_offset_y += dy
+        
+        # Update start position for next delta
+        self.video_pan_start_x = event.x
+        self.video_pan_start_y = event.y
+        
+        # Update display
+        if hasattr(self.video_annotation_handler, 'frame_on_canvas'):
+            self.frame_canvas.coords(
+                self.video_annotation_handler.frame_on_canvas,
+                self.video_pan_offset_x,
+                self.video_pan_offset_y
+            )
+        
+        # Redraw annotations with new pan offset
+        self.redraw_video_annotations_with_zoom()
+    
+    def end_video_pan(self, event):
+        """
+        Ends panning mode for video frame canvas.
+        """
+        self.is_video_panning = False
+        self.frame_canvas.config(cursor="")
+    
+    def transform_video_coordinates(self, image_x, image_y):
+        """
+        Transforms video frame image coordinates to canvas coordinates with zoom and pan.
+        """
+        canvas_x = image_x * self.video_zoom_level + self.video_pan_offset_x
+        canvas_y = image_y * self.video_zoom_level + self.video_pan_offset_y
+        return canvas_x, canvas_y
+    
+    def inverse_transform_video_coordinates(self, canvas_x, canvas_y):
+        """
+        Transforms video canvas coordinates back to original frame coordinates.
+        """
+        image_x = (canvas_x - self.video_pan_offset_x) / self.video_zoom_level
+        image_y = (canvas_y - self.video_pan_offset_y) / self.video_zoom_level
         return image_x, image_y
 
 

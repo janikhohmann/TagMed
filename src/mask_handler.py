@@ -109,7 +109,7 @@ class MaskHandler:
 
 
     def load_masks_for_frame(self):
-        """Load masks for the selected frame into canvas."""
+        """Load masks for the selected frame into canvas with zoom and pan transformation."""
         self.clear_all_masks()
 
         current_frame_id = self.gui.current_frame_id
@@ -136,12 +136,24 @@ class MaskHandler:
 
                 rgba_array[mask_data > 0] = red_color  # only fill mask
 
-                # Convert in PIL-Image then in PhotoImage
+                # Convert to PIL Image
                 pil_image = Image.fromarray(rgba_array, mode="RGBA")
+                
+                # Apply zoom transformation - resize the mask image
+                if hasattr(self.gui, 'video_zoom_level'):
+                    zoom_level = self.gui.video_zoom_level
+                    new_width = int(width * zoom_level)
+                    new_height = int(height * zoom_level)
+                    pil_image = pil_image.resize((new_width, new_height), Image.Resampling.NEAREST)
+                
                 tk_image = ImageTk.PhotoImage(pil_image)
 
-                # Show Image on Canvas
-                mask_id = self.gui.frame_canvas.create_image(0, 0, anchor="nw", image=tk_image, tags=("mask",))
+                # Apply pan transformation - position the mask with pan offsets
+                pan_x = getattr(self.gui, 'video_pan_offset_x', 0)
+                pan_y = getattr(self.gui, 'video_pan_offset_y', 0)
+                
+                # Show Image on Canvas with zoom and pan
+                mask_id = self.gui.frame_canvas.create_image(pan_x, pan_y, anchor="nw", image=tk_image, tags=("mask",))
 
                 
                 # Prevent garbage collection
@@ -155,7 +167,7 @@ class MaskHandler:
 
 
     def load_masks_for_image(self):
-        """Load masks for the selected frame into canvas."""
+        """Load masks for the selected image into canvas with zoom and pan transformation."""
         self.clear_all_masks()
 
         current_frame_id = self.gui.selected_image_index.split(".")[0].strip()
@@ -182,12 +194,24 @@ class MaskHandler:
 
                 rgba_array[mask_data > 0] = red_color  # only fill mask
 
-                # Convert in PIL-Image then in PhotoImage
+                # Convert to PIL Image
                 pil_image = Image.fromarray(rgba_array, mode="RGBA")
+                
+                # Apply zoom transformation - resize the mask image
+                if hasattr(self.gui, 'zoom_level'):
+                    zoom_level = self.gui.zoom_level
+                    new_width = int(width * zoom_level)
+                    new_height = int(height * zoom_level)
+                    pil_image = pil_image.resize((new_width, new_height), Image.Resampling.NEAREST)
+                
                 tk_image = ImageTk.PhotoImage(pil_image)
 
-                # Show Image on Canvas
-                mask_id = self.gui.image_canvas.create_image(0, 0, anchor="nw", image=tk_image, tags=("mask",))
+                # Apply pan transformation - position the mask with pan offsets
+                pan_x = getattr(self.gui, 'pan_offset_x', 0)
+                pan_y = getattr(self.gui, 'pan_offset_y', 0)
+                
+                # Show Image on Canvas with zoom and pan
+                mask_id = self.gui.image_canvas.create_image(pan_x, pan_y, anchor="nw", image=tk_image, tags=("mask",))
 
                 
                 # Prevent garbage collection
