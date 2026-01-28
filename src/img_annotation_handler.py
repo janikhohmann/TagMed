@@ -456,12 +456,16 @@ class ImgAnnotationHandler:
                     print(f"[WARN] Skipping invalid bounding box [{i}] (w or h <= 0)")
                     continue
 
-                # Convert center coordinates and dimensions to corner coordinates
+                # Convert center coordinates and dimensions to corner coordinates (image space)
                 x1, y1 = x - w // 2, y - h // 2  # Top-left corner
                 x2, y2 = x + w // 2, y + h // 2  # Bottom-right corner
 
+                # Transform to canvas coordinates for display
+                canvas_x1, canvas_y1 = self.gui.transform_coordinates(x1, y1)
+                canvas_x2, canvas_y2 = self.gui.transform_coordinates(x2, y2)
+
                 # Create rectangle on canvas with red outline
-                rect_id = self.gui.image_canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=2)
+                rect_id = self.gui.image_canvas.create_rectangle(canvas_x1, canvas_y1, canvas_x2, canvas_y2, outline="red", width=2)
                 self.drawn_rect_ids.append(rect_id)
 
                 # Create formatted text entry for GUI listbox
@@ -481,12 +485,15 @@ class ImgAnnotationHandler:
                     print(f"[WARN] Skipping invalid polygon [{j}]")
                     continue
 
-                # Flatten coordinate pairs into single list for tkinter polygon creation
-                flat_points = [coord for point in polygon for coord in point]
+                # Transform polygon points to canvas coordinates
+                canvas_points = []
+                for point in polygon:
+                    canvas_x, canvas_y = self.gui.transform_coordinates(point[0], point[1])
+                    canvas_points.extend([canvas_x, canvas_y])
                 
                 # Create polygon on canvas with blue outline and unique tag
                 polygon_id = self.gui.image_canvas.create_polygon(
-                    flat_points, outline="blue", fill="", width=2, tags=f"polygon_{j}"
+                    canvas_points, outline="blue", fill="", width=2, tags=f"polygon_{j}"
                 )
 
                 self.drawn_rect_ids.append(polygon_id)
@@ -559,7 +566,9 @@ class ImgAnnotationHandler:
         # remove crosshair lines when bounding box or polygon drawing starts
         self.gui.image_canvas.bind(self.gui.image_canvas.delete("crosshair_line"))
 
-        x, y = event.x, event.y  # Extract mouse position from event
+        # Transform canvas coordinates to image coordinates (accounting for zoom/pan)
+        canvas_x, canvas_y = event.x, event.y
+        x, y = self.gui.inverse_transform_coordinates(canvas_x, canvas_y)
         annotation_mode = self.gui.img_annotation_type.get()  # Get current annotation type
 
         # Validate supported annotation types
@@ -572,9 +581,11 @@ class ImgAnnotationHandler:
             if annotation_mode == "Bounding Box":
                 # Initialize bounding box drawing
                 self.is_drawing = True
-                self.rect_start = (x, y)
+                self.rect_start = (x, y)  # Store in image coordinates
+                # Draw on canvas using canvas coordinates
+                canvas_x, canvas_y = self.gui.transform_coordinates(x, y)
                 self.temp_rect_id = self.gui.image_canvas.create_rectangle(
-                    x, y, x, y, outline="red", width=2, tags="temp_boundingbox")
+                    canvas_x, canvas_y, canvas_x, canvas_y, outline="red", width=2, tags="temp_boundingbox")
                     
             else:  # Polygon
                 # Calculate polygon index for proper canvas element organization
@@ -586,9 +597,11 @@ class ImgAnnotationHandler:
                 self.polygon_index = polygon_index
 
 
-                # Add clicked point to polygon and create visual marker
+                # Add clicked point to polygon (in image coordinates)
                 self.polygon_points.append([x, y])
-                point_id = self.gui.image_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red", tags="polygon")
+                # Draw point on canvas using canvas coordinates
+                canvas_x, canvas_y = self.gui.transform_coordinates(x, y)
+                point_id = self.gui.image_canvas.create_oval(canvas_x-4, canvas_y-4, canvas_x+4, canvas_y+4, fill="red", tags="polygon")
                 self.polygon_point_ids.append(point_id)
                 self.redraw_polygon()  # Update polygon outline
 
@@ -611,8 +624,10 @@ class ImgAnnotationHandler:
             else:
                 # === Polygon Modification ===
                 # Check if user clicked near a polygon point for editing (6 pixel tolerance)
+                # Need to check in canvas coordinates since points are displayed with zoom
                 for i, (px, py) in enumerate(self.polygon_points):
-                    if abs(event.x - px) < 6 and abs(event.y - py) < 6:
+                    canvas_px, canvas_py = self.gui.transform_coordinates(px, py)
+                    if abs(canvas_x - canvas_px) < 6 and abs(canvas_y - canvas_py) < 6:
                         self.selected_point_index = i
                         return
 
@@ -628,7 +643,9 @@ class ImgAnnotationHandler:
         Args:
             event: Tkinter mouse motion event with current coordinates
         """
-        x, y = event.x, event.y  # Extract current mouse position
+        # Transform canvas coordinates to image coordinates (accounting for zoom/pan)
+        canvas_x, canvas_y = event.x, event.y
+        x, y = self.gui.inverse_transform_coordinates(canvas_x, canvas_y)
         annotation_mode = self.gui.img_annotation_type.get()  # Get annotation type
 
         # === Drawing Mode - Real-time Annotation Creation ===
@@ -637,16 +654,21 @@ class ImgAnnotationHandler:
                 # Update rectangle coordinates during drawing
                 # use the temporary rectangle id while drawing (temp_rect_id)
                 if self.is_drawing and self.temp_rect_id:
+                    # Transform both start and current positions to canvas coordinates
+                    canvas_start_x, canvas_start_y = self.gui.transform_coordinates(self.rect_start[0], self.rect_start[1])
+                    canvas_x, canvas_y = self.gui.transform_coordinates(x, y)
                     self.gui.image_canvas.coords(
                         self.temp_rect_id,
-                        self.rect_start[0], self.rect_start[1],
-                        x, y
+                        canvas_start_x, canvas_start_y,
+                        canvas_x, canvas_y
                     )
                     
             else:  # Polygon
-                # Add point during continuous polygon drawing
+                # Add point during continuous polygon drawing (in image coordinates)
                 self.polygon_points.append([x, y])
-                point_id = self.gui.image_canvas.create_oval(x-4, y-4, x+4, y+4, fill="red")
+                # Draw point on canvas using canvas coordinates
+                canvas_x, canvas_y = self.gui.transform_coordinates(x, y)
+                point_id = self.gui.image_canvas.create_oval(canvas_x-4, canvas_y-4, canvas_x+4, canvas_y+4, fill="red")
                 self.polygon_point_ids.append(point_id)
                 self.redraw_polygon()  # Update polygon outline
 
@@ -672,12 +694,13 @@ class ImgAnnotationHandler:
             else:
                 # === Polygon Point Modification ===
                 if self.selected_point_index is not None:
-                    # Update coordinates of selected polygon point
+                    # Update coordinates of selected polygon point (in image coordinates)
                     self.polygon_points[self.selected_point_index] = [x, y]
 
-                    # Update visual representation of the point on canvas
+                    # Update visual representation of the point on canvas (using canvas coordinates)
+                    canvas_x, canvas_y = self.gui.transform_coordinates(x, y)
                     point_id = self.polygon_point_ids[self.selected_point_index]
-                    self.gui.image_canvas.coords(point_id, x-4, y-4, x+4, y+4)
+                    self.gui.image_canvas.coords(point_id, canvas_x-4, canvas_y-4, canvas_x+4, canvas_y+4)
 
                     # Redraw polygon with updated point position
                     self.redraw_polygon()
@@ -693,7 +716,9 @@ class ImgAnnotationHandler:
         Args:
             event: Tkinter mouse button release event
         """
-        x, y = event.x, event.y  # Extract mouse position
+        # Transform canvas coordinates to image coordinates (accounting for zoom/pan)
+        canvas_x, canvas_y = event.x, event.y
+        x, y = self.gui.inverse_transform_coordinates(canvas_x, canvas_y)
         annotation_mode = self.gui.img_annotation_type.get()  # Get annotation type
 
         # === Finalize Bounding Box Operations ===
@@ -926,9 +951,11 @@ class ImgAnnotationHandler:
 
             # New points drawing
             for x, y in polygon:
-                self.polygon_points.append([x, y])
+                self.polygon_points.append([x, y])  # Store in image coordinates
+                # Draw on canvas using canvas coordinates
+                canvas_x, canvas_y = self.gui.transform_coordinates(x, y)
                 point_id = self.gui.image_canvas.create_oval(
-                    x - 4, y - 4, x + 4, y + 4, fill="red"
+                    canvas_x - 4, canvas_y - 4, canvas_x + 4, canvas_y + 4, fill="red"
                 )
                 self.polygon_point_ids.append(point_id)
 
@@ -989,12 +1016,16 @@ class ImgAnnotationHandler:
 
         size = self.resize_handle_size
         canvas = self.gui.image_canvas
+        
+        # Transform corner positions to canvas coordinates
+        canvas_x1, canvas_y1 = self.gui.transform_coordinates(x1, y1)
+        canvas_x2, canvas_y2 = self.gui.transform_coordinates(x2, y2)
 
         self.resize_handles = [
-            canvas.create_rectangle(x1 - size, y1 - size, x1 + size, y1 + size, fill="blue", tags="handle_tl"),
-            canvas.create_rectangle(x2 - size, y1 - size, x2 + size, y1 + size, fill="blue", tags="handle_tr"),
-            canvas.create_rectangle(x1 - size, y2 - size, x1 + size, y2 + size, fill="blue", tags="handle_bl"),
-            canvas.create_rectangle(x2 - size, y2 - size, x2 + size, y2 + size, fill="blue", tags="handle_br"),
+            canvas.create_rectangle(canvas_x1 - size, canvas_y1 - size, canvas_x1 + size, canvas_y1 + size, fill="blue", tags="handle_tl"),
+            canvas.create_rectangle(canvas_x2 - size, canvas_y1 - size, canvas_x2 + size, canvas_y1 + size, fill="blue", tags="handle_tr"),
+            canvas.create_rectangle(canvas_x1 - size, canvas_y2 - size, canvas_x1 + size, canvas_y2 + size, fill="blue", tags="handle_bl"),
+            canvas.create_rectangle(canvas_x2 - size, canvas_y2 - size, canvas_x2 + size, canvas_y2 + size, fill="blue", tags="handle_br"),
         ]
 
     def remove_resize_handles(self):
@@ -1020,8 +1051,12 @@ class ImgAnnotationHandler:
         x2, y2 = self.rect_end
         self.rect_start = (x1 + dx, y1 + dy)
         self.rect_end = (x2 + dx, y2 + dy)
+        
+        # Transform to canvas coordinates for display
+        canvas_x1, canvas_y1 = self.gui.transform_coordinates(self.rect_start[0], self.rect_start[1])
+        canvas_x2, canvas_y2 = self.gui.transform_coordinates(self.rect_end[0], self.rect_end[1])
 
-        self.gui.image_canvas.coords(self.rect_id, self.rect_start[0], self.rect_start[1], self.rect_end[0], self.rect_end[1])
+        self.gui.image_canvas.coords(self.rect_id, canvas_x1, canvas_y1, canvas_x2, canvas_y2)
         self.update_resize_handles()
 
 
@@ -1046,8 +1081,12 @@ class ImgAnnotationHandler:
             self.rect_end = (x2, y)
         elif handle == "handle_br":
             self.rect_end = (x, y)
+        
+        # Transform to canvas coordinates for display
+        canvas_x1, canvas_y1 = self.gui.transform_coordinates(self.rect_start[0], self.rect_start[1])
+        canvas_x2, canvas_y2 = self.gui.transform_coordinates(self.rect_end[0], self.rect_end[1])
 
-        self.gui.image_canvas.coords(self.rect_id, self.rect_start[0], self.rect_start[1], self.rect_end[0], self.rect_end[1])
+        self.gui.image_canvas.coords(self.rect_id, canvas_x1, canvas_y1, canvas_x2, canvas_y2)
         self.update_resize_handles()
 
 
@@ -1075,6 +1114,7 @@ class ImgAnnotationHandler:
     def get_handle_at_position(self, x, y):
         """
         Returns the handle tag name if the position (x, y) is near any handle.
+        Note: x, y are in image coordinates, need to compare with handle positions.
         """
         if not self.rect_start or not self.rect_end:
             return None
@@ -1084,7 +1124,8 @@ class ImgAnnotationHandler:
         if x1 > x2: x1, x2 = x2, x1
         if y1 > y2: y1, y2 = y2, y1
 
-        size = self.resize_handle_size
+        # Size tolerance in image space (adjusted for zoom)
+        size = self.resize_handle_size / self.gui.zoom_level
 
         if abs(x - x1) <= size and abs(y - y1) <= size:
             return "handle_tl"
@@ -1270,15 +1311,19 @@ class ImgAnnotationHandler:
 
         # Only draw polygon if there are at least 2 points
         if len(self.polygon_points) >= 2:
-            # Flatten coordinate pairs into single list for tkinter
-            flat_points = [coord for point in self.polygon_points for coord in point]
+            # Transform polygon points to canvas coordinates
+            canvas_points = []
+            for point in self.polygon_points:
+                canvas_x, canvas_y = self.gui.transform_coordinates(point[0], point[1])
+                canvas_points.extend([canvas_x, canvas_y])
             
-            # Close polygon by adding first point at the end
-            flat_points += self.polygon_points[0]
+            # Close polygon by adding first point at the end (in canvas coordinates)
+            first_canvas_x, first_canvas_y = self.gui.transform_coordinates(self.polygon_points[0][0], self.polygon_points[0][1])
+            canvas_points.extend([first_canvas_x, first_canvas_y])
 
             # Create polygon outline on canvas
             self.polygon_line_id = self.gui.image_canvas.create_polygon(
-                flat_points, outline="blue", fill="", width=2, tags=(canvas_tag, "polygon")
+                canvas_points, outline="blue", fill="", width=2, tags=(canvas_tag, "polygon")
             )
 
     def delete_last_polygon_point(self):

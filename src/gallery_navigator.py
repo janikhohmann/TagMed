@@ -105,6 +105,14 @@ class GalleryNavigator:
 
         self.selected_image_index = None
 
+        # Zoom and Pan variables for image canvas
+        self.zoom_level = 1.0  # 1.0 = 100%, range: 1.0 to 2.0
+        self.pan_offset_x = 0
+        self.pan_offset_y = 0
+        self.is_panning = False
+        self.pan_start_x = 0
+        self.pan_start_y = 0
+
     def refresh_configuration(self):
         """
         Loads the latest configuration settings.
@@ -121,6 +129,7 @@ class GalleryNavigator:
         self.all_annotations = self.annotation_loader.load_annotations_in_internal_list()
         self.data_loader = DataLoader()
         self.medical_record_loader = MedicalRecordLoader()
+
 
 
 
@@ -153,6 +162,11 @@ class GalleryNavigator:
         # Shortcut bindings for common actions
         self.patient_window.bind("<Control-z>", lambda event: self.delete_last_polygon_point_manager())
         self.patient_window.bind("<Control-e>", lambda event: self.modify_annotation_manager())
+        
+        # Zoom and Pan bindings for image canvas
+        self.patient_window.bind("<Control-MouseWheel>", self.on_zoom)
+        self.patient_window.bind("<Control-Button-4>", self.on_zoom)  # Linux scroll up
+        self.patient_window.bind("<Control-Button-5>", self.on_zoom)  # Linux scroll down
         
 
 
@@ -239,6 +253,12 @@ class GalleryNavigator:
         image_frame.grid_rowconfigure(1, weight=1)
         image_frame.grid_columnconfigure(0, weight=1)
 
+        # Create header frame for image name and zoom percentage
+        header_frame = tk.Frame(image_frame, bg=image_frame.cget("bg"))
+        header_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2))
+        header_frame.grid_columnconfigure(0, weight=1)
+        header_frame.grid_columnconfigure(1, weight=0)
+
         # load the selected image name for header text
         try:
             header_text = self.selected_image_index.split(".")[0]
@@ -248,12 +268,22 @@ class GalleryNavigator:
              header_text = self.selected_image_index 
 
         self.header_label_img = tk.Label(
-            image_frame,
+            header_frame,
             text=header_text,
             bg=image_frame.cget("bg"),
             font=("Arial", 11, "bold")
             )
-        self.header_label_img.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 2)) 
+        self.header_label_img.grid(row=0, column=0, sticky="w")
+        
+        # Zoom percentage label
+        self.zoom_label_img = tk.Label(
+            header_frame,
+            text="100%",
+            bg=image_frame.cget("bg"),
+            font=("Arial", 11, "bold"),
+            fg="black"
+            )
+        self.zoom_label_img.grid(row=0, column=1, sticky="e", padx=(10, 0)) 
 
         self.image_canvas = tk.Canvas(image_frame, bg="white", highlightthickness=0) 
         self.image_canvas.grid(row=1, column=0, sticky="nsew", padx=5, pady=(2, 5))
@@ -261,6 +291,11 @@ class GalleryNavigator:
         # Bind crosshair drawing to mouse motion and clear on leave
         self.image_canvas.bind("<Motion>", self.draw_crosshair)
         self.image_canvas.bind("<Leave>", lambda event: self.image_canvas.delete("crosshair_line"))
+        
+        # Bind pan functionality to image canvas
+        self.image_canvas.bind("<Control-ButtonPress-1>", self.start_pan)
+        self.image_canvas.bind("<Control-B1-Motion>", self.pan_image)
+        self.image_canvas.bind("<Control-ButtonRelease-1>", self.end_pan)
 
         self.setup_img_bottom_frame(image_tab)
 
@@ -407,6 +442,12 @@ class GalleryNavigator:
         self.image_canvas.delete("temp_boundingbox") # clean up any temporary bounding box
 
         self.video_mode = False
+        
+        # Reset zoom and pan when selecting new image
+        self.zoom_level = 1.0
+        self.pan_offset_x = 0
+        self.pan_offset_y = 0
+        self.update_zoom_label()
 
         selection = self.image_listbox.curselection()
         if not selection:
@@ -433,7 +474,8 @@ class GalleryNavigator:
 
         width, height = self.image_size
         pil_image = pil_image.resize((width, height), Image.Resampling.LANCZOS)
-        self.pil_image_for_processing = pil_image.copy() 
+        self.pil_image_for_processing = pil_image.copy()
+        self.original_pil_image = pil_image.copy()  # Store original for zoom operations
 
         self.tk_image = ImageTk.PhotoImage(pil_image)
         x = 0 
@@ -1166,7 +1208,7 @@ class GalleryNavigator:
             ann_type = annotation_type_var
 
         # Only draw crosshair when the current annotation type for this canvas is "Bounding Box"
-        if ann_type == "Bounding Box":
+        if ann_type == "Bounding Box" and not bool(event.state & 0x0004):  # dont draw crosshair while zooming (Ctrl pressed)
             x = event.x
             y = event.y
             width = canvas.winfo_width()
@@ -1178,5 +1220,233 @@ class GalleryNavigator:
         else:
             # Don't draw anything for other annotation types
             return
+
+
+    # ========== Zoom and Pan Methods ==========
+
+    def on_zoom(self, event):
+        """
+        Handles zoom events with Ctrl+MouseWheel.
+        
+        Zooms in or out on the image canvas while keeping coordinates
+        relative to the original image unchanged. Limits zoom range
+        between 100% (1.0) and 200% (2.0).
+        
+        Args:
+            event: Mouse wheel event with delta information
+        """
+        # # Use the actual canvas that triggered the event (works for image_canvas and frame_canvas)
+        # canvas = event.widget
+        # # Remove existing crosshair lines on this canvas only
+        # try:
+        #     canvas.delete("crosshair_line")
+        # except Exception:
+        #     pass
+
+        # Only zoom if cursor is over image canvas
+        if not hasattr(self, 'image_canvas') or not hasattr(self, 'original_pil_image'):
+            return
+            
+        # Check if event is from image canvas area
+        try:
+            widget = event.widget
+            # Navigate up to find if we're in image_canvas context
+            while widget:
+                if widget == self.image_canvas:
+                    break
+                widget = widget.master if hasattr(widget, 'master') else None
+            else:
+                # Not over image canvas
+                return
+        except:
+            return
+
+        # Determine zoom direction
+        if event.num == 4 or event.delta > 0:  # Scroll up - zoom in
+            zoom_factor = 1.1
+        elif event.num == 5 or event.delta < 0:  # Scroll down - zoom out
+            zoom_factor = 0.9
+        else:
+            return
+
+        # Calculate new zoom level
+        new_zoom = self.zoom_level * zoom_factor
+        
+        # Limit zoom range: 100% to 300%
+        new_zoom = max(1.0, min(3.0, new_zoom))
+        
+        if new_zoom == self.zoom_level:
+            return  # No change needed
+        
+        self.zoom_level = new_zoom
+        
+        # Reset pan when zooming out to 100%
+        if self.zoom_level == 1.0:
+            self.pan_offset_x = 0
+            self.pan_offset_y = 0
+        
+        self.update_image_display()
+        self.update_zoom_label()
+
+    def update_image_display(self):
+        """
+        Updates the image display with current zoom and pan settings.
+        
+        Applies zoom transformation to the original image and positions
+        it according to pan offsets. Redraws all annotations at correct
+        positions.
+        """
+        if not hasattr(self, 'original_pil_image'):
+            return
+            
+        # Calculate new image size based on zoom
+        width, height = self.image_size
+        new_width = int(width * self.zoom_level)
+        new_height = int(height * self.zoom_level)
+        
+        # Resize image
+        zoomed_image = self.original_pil_image.resize(
+            (new_width, new_height), 
+            Image.Resampling.LANCZOS
+        )
+        
+        self.tk_image = ImageTk.PhotoImage(zoomed_image)
+        
+        # Update canvas image with pan offset
+        if hasattr(self, 'image_on_canvas'):
+            self.image_canvas.coords(
+                self.image_on_canvas, 
+                self.pan_offset_x, 
+                self.pan_offset_y
+            )
+            self.image_canvas.itemconfig(self.image_on_canvas, image=self.tk_image)
+        
+        # Redraw all annotations with new coordinates
+        self.redraw_annotations_with_zoom()
+
+    def redraw_annotations_with_zoom(self):
+        """
+        Redraws all annotations with zoom and pan transformation applied.
+        
+        Clears existing annotation visuals and reloads them from the
+        annotation data, applying current zoom and pan transformations.
+        """
+        if not hasattr(self, 'img_annotation_handler'):
+            return
+            
+        # Store current selections and state
+        current_selection = None
+        if hasattr(self.img_annotation_handler, 'listbox_index'):
+            current_selection = self.img_annotation_handler.listbox_index
+        
+        # Clear visual annotations (but keep data)
+        for rect_id in self.img_annotation_handler.drawn_rect_ids:
+            try:
+                self.image_canvas.delete(rect_id)
+            except:
+                pass
+        self.img_annotation_handler.drawn_rect_ids.clear()
+        
+        # Reload annotations (will use transform_coordinates)
+        if self.selected_image_index:
+            base_name = self.selected_image_index.split(".")[0]
+            self.img_annotation_handler.load_annotations_for_image(base_name)
+
+    def update_zoom_label(self):
+        """
+        Updates the zoom percentage label display.
+        """
+        if hasattr(self, 'zoom_label_img'):
+            percentage = int(self.zoom_level * 100)
+            self.zoom_label_img.config(text=f"{percentage}%")
+
+    def start_pan(self, event):
+        """
+        Starts panning mode when Ctrl+Click on image.
+        
+        Args:
+            event: Mouse button press event
+        """
+        self.is_panning = True
+        self.pan_start_x = event.x
+        self.pan_start_y = event.y
+        self.image_canvas.config(cursor="fleur")  # Change cursor to indicate panning
+
+    def pan_image(self, event):
+        """
+        Handles image panning during Ctrl+Drag.
+        
+        Args:
+            event: Mouse motion event
+        """
+        if not self.is_panning:
+            return
+            
+        # Calculate movement delta
+        dx = event.x - self.pan_start_x
+        dy = event.y - self.pan_start_y
+        
+        # Update pan offsets
+        self.pan_offset_x += dx
+        self.pan_offset_y += dy
+        
+        # Update start position for next delta
+        self.pan_start_x = event.x
+        self.pan_start_y = event.y
+        
+        # Update display
+        if hasattr(self, 'image_on_canvas'):
+            self.image_canvas.coords(
+                self.image_on_canvas,
+                self.pan_offset_x,
+                self.pan_offset_y
+            )
+
+    def end_pan(self, event):
+        """
+        Ends panning mode when releasing Ctrl+Click.
+        
+        Args:
+            event: Mouse button release event
+        """
+        self.is_panning = False
+        self.image_canvas.config(cursor="")  # Reset cursor
+
+    def transform_coordinates(self, image_x, image_y):
+        """
+        Transforms image coordinates to canvas coordinates with zoom and pan.
+        
+        Converts coordinates from the original image space (100% zoom)
+        to the current canvas display space with zoom and pan applied.
+        
+        Args:
+            image_x: X coordinate in original image space
+            image_y: Y coordinate in original image space
+            
+        Returns:
+            tuple: (canvas_x, canvas_y) in current display space
+        """
+        canvas_x = image_x * self.zoom_level + self.pan_offset_x
+        canvas_y = image_y * self.zoom_level + self.pan_offset_y
+        return canvas_x, canvas_y
+
+    def inverse_transform_coordinates(self, canvas_x, canvas_y):
+        """
+        Transforms canvas coordinates back to original image coordinates.
+        
+        Converts coordinates from the current canvas display space
+        back to the original image space (100% zoom), removing the
+        effects of zoom and pan transformations.
+        
+        Args:
+            canvas_x: X coordinate in current canvas space
+            canvas_y: Y coordinate in current canvas space
+            
+        Returns:
+            tuple: (image_x, image_y) in original image space
+        """
+        image_x = (canvas_x - self.pan_offset_x) / self.zoom_level
+        image_y = (canvas_y - self.pan_offset_y) / self.zoom_level
+        return image_x, image_y
 
 
