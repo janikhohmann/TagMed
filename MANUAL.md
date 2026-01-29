@@ -309,6 +309,8 @@ Annotations are saved in csv format with columns:
 - `polygon_annotype`: Polygon annotation type
 - `masks`: Paths to generated mask files
 
+You can export your annotations in COCO-Format via the graphical user interface. 
+
 ---
 
 ## Recommendations
