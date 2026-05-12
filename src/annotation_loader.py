@@ -151,7 +151,18 @@ class AnnotationLoader():
         Returns:
             pd.DataFrame: DataFrame containing all valid annotation entries
         """
-        anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
+        #anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
+        anno_table = pd.read_csv(
+            self.selected_anno_table_file,
+            sep=";",
+            dtype={
+                "masks": "object",
+                "polygon": "object",
+                "class": "object",
+                "class_polygon": "object",
+                "file_path": "object"
+            }
+        )
         # Load all possible annotations, including empty ones (None/NaN values)
         # Return all rows instead of filtering for string values in 'x' column
         annotated_images = anno_table  # Return all rows, not just those with string x values
