@@ -368,8 +368,69 @@ class SAM2Tracking:
                         centroid_y = int(np.mean(points_array[:, 1]))
                     
                     # Add the click at the centroid
-                    points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
-                    labels = np.array([1], np.int32)  # Positive click
+                    ####################################################################################################
+                    # original: only one point at the centroid - this can be weak for large objects or complex shapes
+                    # points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
+                    # labels = np.array([1], np.int32)  # Positive click
+
+                    #  approach 2 : sample multiple points on the outline of the polygon 
+                    # points = scaled_points.astype(np.float32)
+                    # labels = np.ones(len(points), dtype=np.int32)
+
+                    #  approach 3 : sample multiple points within the polygon and add negative points around it
+                    
+                    H, W = original_height, original_width                    
+                    mask = np.zeros((H, W), dtype=np.uint8)
+                    cv2.fillPoly(mask, [scaled_points.astype(np.int32)], 1)
+
+                    # Positive points inside the mask
+                    ys, xs = np.where(mask > 0)
+                    indices = np.random.choice(len(xs), size=min(15, len(xs)), replace=False)
+                    pos_points = np.stack([xs[indices], ys[indices]], axis=1).astype(np.float32)
+                    pos_labels = np.ones(len(pos_points), dtype=np.int32)
+
+                    # Negative points in a ring around the mask
+                    kernel = np.ones((25, 25), np.uint8)
+                    dilated_mask = cv2.dilate(mask, kernel, iterations=1)
+                    ring_mask = (dilated_mask > 0) & (mask == 0)
+                    ys_neg, xs_neg = np.where(ring_mask)
+
+                    if len(xs_neg) > 0:
+                        neg_indices = np.random.choice(len(xs_neg), size=min(15, len(xs_neg)), replace=False)
+                        neg_points = np.stack([xs_neg[neg_indices], ys_neg[neg_indices]], axis=1).astype(np.float32)
+                        neg_labels = np.zeros(len(neg_points), dtype=np.int32)
+
+                        # Combine positive and negative points
+                        points = np.concatenate([pos_points, neg_points], axis=0)
+                        labels = np.concatenate([pos_labels, neg_labels], axis=0)
+                    else:
+                        # Fallback to only positive points if no negative points can be sampled
+                        points = pos_points
+                        labels = pos_labels
+
+                    ########################################################################################################    
+
+                    # Create a debug image to visualize the points
+                    debug_image = original_frame.copy()
+                    # Draw positive points in green
+                    for p in pos_points:
+                        cv2.circle(debug_image, (int(p[0]), int(p[1])), 5, (0, 255, 0), -1)
+                    # Draw negative points in red
+                    if 'neg_points' in locals():
+                        for p in neg_points:
+                            cv2.circle(debug_image, (int(p[0]), int(p[1])), 5, (0, 0, 255), -1)
+                    
+                    # Draw the polygon outline
+                    cv2.polylines(debug_image, [scaled_points.astype(np.int32)], isClosed=True, color=(255, 0, 0), thickness=2)
+
+                    # Save the debug image
+                    debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug')
+                    os.makedirs(debug_dir, exist_ok=True)
+                    debug_image_path = os.path.join(debug_dir, f"{current_image_id}_sam2_prompt_points.jpg")
+                    cv2.imwrite(debug_image_path, debug_image)
+                    print(f"[DEBUG] Saved prompt visualization to {debug_image_path}")
+
+                    #####################################################################################################
                     
                     # Store prompt for later (will be added after state init)
                     current_prompt['coords'] = {
