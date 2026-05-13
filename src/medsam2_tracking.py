@@ -364,16 +364,21 @@ class MedSAM2Tracking:
                         centroid_x = int(np.mean(points_array[:, 0]))
                         centroid_y = int(np.mean(points_array[:, 1]))
                     
-                    # Add the click at the centroid
-                    points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
-                    labels = np.array([1], np.int32)  # Positive click
+                    # # Add the click at the centroid
+                    # points = np.array([[centroid_x, centroid_y]], dtype=np.float32)
+                    # labels = np.array([1], np.int32)  # Positive click
                     
-                    # Store prompt for later (will be added after state init)
-                    current_prompt['coords'] = {
-                        'points': points,
-                        'labels': labels
-                    }
-                    
+                    # # Store prompt for later (will be added after state init)
+                    # current_prompt['coords'] = {
+                    #     'points': points,
+                    #     'labels': labels
+                    # }
+
+
+                    H, W = original_height, original_width                    
+                    mask = np.zeros((H, W), dtype=np.uint8)
+                    cv2.fillPoly(mask, [scaled_points.astype(np.int32)], 1)
+
                     print(f"[INFO] Stored polygon prompt on frame {current_frame_index} (obj_id={ann_obj_id})")
 
                 except IndexError:
@@ -458,13 +463,20 @@ class MedSAM2Tracking:
                 
                 if prompt['is_polygon']:
                     # Add polygon points
-                    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                        inference_state=self.gui.inference_state,
-                        frame_idx=prompt['frame_idx'],
-                        obj_id=prompt['ann_obj_id'],
-                        points=prompt['coords']['points'],
-                        labels=prompt['coords']['labels'],
-                    )
+                    # _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                    #     inference_state=self.gui.inference_state,
+                    #     frame_idx=prompt['frame_idx'],
+                    #     obj_id=prompt['ann_obj_id'],
+                    #     points=prompt['coords']['points'],
+                    #     labels=prompt['coords']['labels'],
+                    # )
+                     _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
+                            inference_state=self.gui.inference_state,
+                            frame_idx=prompt['frame_idx'],
+                            obj_id=prompt['ann_obj_id'],
+                            mask=mask
+                        )
+                    
                 else:
                     # Add bounding box
                     _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
