@@ -160,7 +160,8 @@ class AnnotationLoader():
                 "polygon": "object",
                 "class": "object",
                 "class_polygon": "object",
-                "file_path": "object"
+                "file_path": "object",
+                "polygon_annotype": "object",
             }
         )
         # Load all possible annotations, including empty ones (None/NaN values)
