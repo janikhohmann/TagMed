@@ -12,32 +12,15 @@
  </table>
 </div>
 
+## Important
+**This repository is associated with a manuscript that is currently undergoing peer review. As the manuscript has not yet been accepted for publication, the contents of this repository should be considered preliminary and may be subject to change. The repository has been made public to ensure access for reviewers and interested readers during the review process.**
 
 ## Overview
 TagMed is designed to facilitate the annotation of sensitive ultrasound images and corresponding medical reports for computer vision projects. 
 
-<img src="resources/images/TagMed_graphical_abstract.png">
+*insert graphical abstract*
 
-**Graphical Overview of the TagMed Annotation Framework.**
 
-**(A)** Liver ultrasound videos from four diagnostic entities (Hepatocellular carcinoma (HCC),
-Metastasis (MET), Focal nodular hyperplasia (FNH), Hemangioma (HEM)) were imported
-into TagMed. Every 10th frame was manually annotated by two expert sonographers using
-pixel-wise segmentation masks and bounding boxes to create the clinical ground truth.
-
-**(B)** TagMed performs automatic dataset indexing, displays optional medical reports, and enables
-interactive initialization of object regions via polygons or bounding boxes. Integrated SAM-based
-segmentation models (**SAM2**, **SAM3**, **MedSAM2**) propagate masks frame-to-frame, allowing
-rapid annotation with optional corrective prompts. All annotations are processed and stored locally
-to ensure data-privacy compliance.
-
-**(C)** Automatically generated segmentations are compared with expert ground truth using
-Dice Similarity Coefficient (DSC) score. Additional analyses include temporal stability across
-video sequences, and differences between bounding-box and mask-based prompts.
-
-_Image of the liver (A) is adapted from Servier Medical Art
-(https://smart.servier.com), licensed under **CC BY 4.0**
-(https://creativecommons.org/licenses/by/4.0/)._
 
 
 ## Features
