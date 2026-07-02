@@ -510,7 +510,14 @@ class GalleryNavigator:
         self.selected_image_index = selected_image
         image_path = os.path.join(self.selected_image_folder, self.patient_id, self.selected_exam, selected_image)
 
-        pil_image = Image.open(image_path)
+        try:
+            pil_image = Image.open(image_path)
+        except (FileNotFoundError, OSError) as e:
+            messagebox.showerror(
+                "Image error",
+                f"Could not open image:\n{image_path}\n\n{e}"
+            )
+            return
 
         width, height = self.image_size
         pil_image = pil_image.resize((width, height), Image.Resampling.LANCZOS)

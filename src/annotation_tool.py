@@ -175,6 +175,14 @@ class AnnotationTool:
         self.full_data for the search function.
         """
 
+        # === GUARD: a valid image folder must be configured before loading data ===
+        if not self.selected_image_folder or not os.path.isdir(self.selected_image_folder):
+            messagebox.showinfo(
+                "No image folder",
+                "No valid image folder selected.\n\nPlease add an image folder via the File menu first."
+            )
+            return
+
         # === CREATE PROGRESS POPUP ===
         popup = tk.Toplevel()
         popup.geometry("300x100")

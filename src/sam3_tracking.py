@@ -21,8 +21,15 @@ import os
 import numpy as np
 import cv2
 import ast
-import torch
 import pandas as pd
+
+# PyTorch is an optional dependency so the core annotation tool can start even
+# when it is not installed. It is only required for AI-assisted tracking and is
+# guarded at the entry point (check_if_sam_3_is_available).
+try:
+    import torch
+except ImportError:
+    torch = None
 
 from config_handler import ConfigHandler
 from video_annotation_handler import VideoAnnotationHandler
@@ -86,6 +93,16 @@ class SAM3Tracking:
         Returns:
             bool: True if SAM3 is available and authenticated, False otherwise
         """
+        # Guard: AI-assisted tracking needs PyTorch which is an optional dependency.
+        if torch is None:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Missing dependency",
+                "PyTorch is not installed, so SAM3 tracking is unavailable.\n\n"
+                "Please install the ML packages (torch) to use this feature."
+            )
+            return False
+
         try:
             # Try importing the SAM3 module
             from sam3.model_builder import build_sam3_video_predictor

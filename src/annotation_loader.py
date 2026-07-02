@@ -58,6 +58,9 @@ class AnnotationLoader():
         Returns:
             list: Sorted list of patient ID strings
         """
+        # Guard against an unset or invalid image folder to avoid os.listdir crashing.
+        if not self.selected_image_folder or not os.path.isdir(self.selected_image_folder):
+            return []
         return sorted(
             [d for d in os.listdir(self.selected_image_folder) if os.path.isdir(os.path.join(self.selected_image_folder, d))]
         )
