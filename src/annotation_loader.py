@@ -117,30 +117,107 @@ class AnnotationLoader():
         ]
         return exams
 
+    # Tokens that represent an *empty* / cleared annotation cell. Used to decide
+    # whether a row actually carries an annotation. Kept lowercase for comparison.
+    ANNOTATED_EMPTY_TOKENS = {"", "nan", "none", "nn", "[]"}
+
+    @classmethod
+    def annotated_row_mask(cls, df):
+        """
+        Return a vectorized boolean Series marking rows that carry a real
+        bounding-box or polygon annotation.
+
+        Robust to NaN, empty lists and the "NN" deletion marker so that cleared
+        annotations are NOT counted as annotated. Works both for in-memory lists
+        (e.g. ['tumor']) and CSV string representations (e.g. "['tumor']").
+
+        Args:
+            df (pd.DataFrame): Annotation table
+
+        Returns:
+            pd.Series[bool]: True where an annotation is present
+        """
+        def col_has_value(col):
+            if col not in df.columns:
+                return pd.Series(False, index=df.index)
+            s = df[col]
+            # Explicit NaN handling: depending on the pandas version, astype(str) on a
+            # missing value yields either the string "nan" or keeps NaN, so rely on
+            # notna() rather than string comparison for the missing case.
+            notna = s.notna()
+            text = s.astype(str).str.strip().str.lower()
+            return notna & ~text.isin(cls.ANNOTATED_EMPTY_TOKENS)
+
+        return col_has_value("class") | col_has_value("class_polygon")
+
     def count_annotated_images(self, patient_id):
         """
         Counts annotated images for a given patient based on the annotation table.
-        
+
         Reads the annotation CSV file and counts entries for the specified patient
-        that have actual annotations (non-"NN" values for class or class_polygon).
-        
+        that have actual annotations (ignoring NaN/empty/"NN" values).
+
         Args:
             patient_id (str): Patient identifier
-            
+
         Returns:
             int: Number of annotated images for this patient
         """
-        try : 
+        try:
             anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
-            filtered = anno_table[
-                (anno_table["pat_ID"] == patient_id) &
-                (
-                    (anno_table["class"].notna() | (anno_table["class_polygon"].notna()))
-                )
-            ]
         except FileNotFoundError:
             return 0
-        return len(filtered)
+        mask = (anno_table["pat_ID"].astype(str).str.strip() == str(patient_id).strip()) & \
+               self.annotated_row_mask(anno_table)
+        return int(mask.sum())
+
+    def patient_stats_from_table(self):
+        """
+        Compute per-patient statistics from a SINGLE read of the annotation table.
+
+        Returns a dict: pat_ID -> {"exams": int, "total": int, "annotated": int}.
+
+        This replaces the previous approach in populate_tree that walked the whole
+        filesystem and opened every video with OpenCV to count frames (extremely
+        slow on large databases). The annotation table already contains one row per
+        image and per extractable video frame, so the total number of annotatable
+        units for a patient is simply the number of rows for that patient.
+
+        Returns:
+            dict: Mapping of patient IDs to their statistics
+        """
+        try:
+            anno = pd.read_csv(
+                self.selected_anno_table_file,
+                sep=";",
+                dtype={"pat_ID": "object", "exam_ID": "object", "img_ID": "object",
+                       "class": "object", "class_polygon": "object"},
+            )
+        except FileNotFoundError:
+            return {}
+
+        if anno.empty or "pat_ID" not in anno.columns:
+            return {}
+
+        tmp = pd.DataFrame({
+            "pat": anno["pat_ID"].astype(str).str.strip(),
+            "exam": anno["exam_ID"].astype(str) if "exam_ID" in anno.columns else "",
+            "annotated": self.annotated_row_mask(anno).astype(int),
+        })
+
+        grouped = tmp.groupby("pat")
+        total = grouped.size()
+        annotated_sum = grouped["annotated"].sum()
+        exams = grouped["exam"].nunique()
+
+        stats = {}
+        for pid in total.index:
+            stats[pid] = {
+                "exams": int(exams[pid]),
+                "total": int(total[pid]),
+                "annotated": int(annotated_sum[pid]),
+            }
+        return stats
     
        
 
@@ -220,8 +297,7 @@ class AnnotationLoader():
         """
         try:
             self.all_annotated_data.to_csv(self.selected_anno_table_file, sep=";", index=False)
-            annotations = self.all_annotated_data["x"] != None
-            print(f"[DEBUG] Saved {len(annotations)} rows to {self.selected_anno_table_file}")
+            print(f"[DEBUG] Saved {len(self.all_annotated_data)} rows to {self.selected_anno_table_file}")
 
         except Exception as e:
              print(f"Error saving annotations to table: {e}")

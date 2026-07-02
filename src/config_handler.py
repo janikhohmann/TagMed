@@ -18,8 +18,11 @@ Institution: University Hospital Düsseldorf
 import json
 import os
 
-SETTINGS_FILE="../user_settings.json"  
-ABS_SETTINGS_FILE = os.path.abspath(SETTINGS_FILE) # Absolute path to the settings file
+# Resolve the settings file relative to this source file (not the current working
+# directory) so TagMed works regardless of where it is launched from.
+_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+SETTINGS_FILE = os.path.abspath(os.path.join(_SRC_DIR, "..", "user_settings.json"))
+ABS_SETTINGS_FILE = SETTINGS_FILE  # Absolute path to the settings file
 
 class ConfigHandler:
     """

@@ -190,8 +190,17 @@ def install_core_packages(env_pip):
     print(f"Using pip from: {env_pip}")
     subprocess.run([env_pip, "--version"], check=True)
     print("")
+
+    # PyTorch: pick an install command appropriate for the platform. The CUDA 12.1
+    # index has no macOS wheels, so macOS uses the default PyPI wheels (CPU/MPS).
+    # Override manually for a different CUDA version or a CPU-only Linux/Windows install.
+    if platform.system().lower() == "darwin":
+        torch_pkg = "torch torchvision torchaudio"
+    else:
+        torch_pkg = "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121"
+
     core_packages = [
-        "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121",  # PyTorch ecosystem
+        torch_pkg,                        # PyTorch ecosystem
         "opencv-python",                  # Computer vision
         "pandas",                         # Data manipulation
         "numpy",                          # Numerical computing

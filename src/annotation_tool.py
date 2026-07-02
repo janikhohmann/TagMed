@@ -192,6 +192,17 @@ class AnnotationTool:
         percent_label = tk.Label(popup, text="0%")
         percent_label.pack()
 
+        # ==== CHECK THAT THE ANNOTATION TABLE EXISTS ===
+        # Only an existence check here - the actual statistics come from a single
+        # read of the table below (see patient_stats_from_table), instead of the
+        # previous per-patient filesystem walk + OpenCV frame counting.
+        if not self.selected_anno_table_file or not os.path.exists(self.selected_anno_table_file):
+            popup.destroy()
+            if messagebox.askokcancel("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}\n\nShould a new annotation table be created with default values?"):
+                # Create a new annotation table with default values
+                self.link_create_default_anno_table()
+            return
+
         # === CLEAR TABLE ===
         for row in self.tree.get_children():
             self.tree.delete(row)
@@ -200,24 +211,18 @@ class AnnotationTool:
         # === LOAD PATIENT DATA ===
         all_patients = self.annotation_loader.available_patients()
         total = len(all_patients)
-        # print(all_patients)
 
-        # ==== READ ANNOTATION TABLE AND CHECK IF IT EXISTS ===
-        try:
-            anno_table = pd.read_csv(self.selected_anno_table_file, sep=";")
-        except FileNotFoundError:
-            #print(f"[ERROR] Annotation table file not found: {self.selected_anno_table_file}")
-            #messagebox.showinfo("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}\n\nPlease check the file path or create a new one.")
-            if messagebox.askokcancel("ERROR", f"Annotation table file not found: {self.selected_anno_table_file}\n\nShould a new annotation table created with default values."):
-                # Create a new annotation table with default values
-                self.link_create_default_anno_table()
-            return
+        # Compute all per-patient statistics in ONE pass over the annotation table.
+        # The table already has one row per image and per video frame, so counting
+        # rows is far faster than re-opening every video to count its frames.
+        stats = self.annotation_loader.patient_stats_from_table()
 
         # === PROCESS EACH PATIENT ===
         for i, patient_id in enumerate(all_patients, 1):
-            # Collect statistics
-            exams, total_files = self.annotation_loader.count_exams_and_files(patient_id)
-            annotated_images = self.annotation_loader.count_annotated_images(patient_id)
+            patient_stats = stats.get(str(patient_id).strip(), {"exams": 0, "total": 0, "annotated": 0})
+            exams = patient_stats["exams"]
+            total_files = patient_stats["total"]
+            annotated_images = patient_stats["annotated"]
 
             # Calculate progress
             try:
@@ -237,10 +242,11 @@ class AnnotationTool:
             self.tree.insert("", "end", values=row)
             self.full_data.append(row)
 
-            # Update progress popup
-            progress["value"] = (i / total) * 100
-            percent_label.config(text=f"{int((i / total) * 100)}%")
-            popup.update_idletasks()
+            # Update progress popup periodically (avoids per-row UI overhead)
+            if total and (i % 25 == 0 or i == total):
+                progress["value"] = (i / total) * 100
+                percent_label.config(text=f"{int((i / total) * 100)}%")
+                popup.update_idletasks()
 
         # === CLEANUP ===
         popup.destroy()

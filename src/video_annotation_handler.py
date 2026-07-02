@@ -193,7 +193,17 @@ class VideoAnnotationHandler():
                 self.gui.wrong_annotation_warning_gui("Bounding Box")
                 self.delete_all_bounding_boxes()
                 return
-                
+
+            # Guard: nothing has been drawn yet -> avoid crashing on empty
+            # rect_start/rect_end (and avoid re-adding a stale rectangle).
+            if not self.rect_start or not self.rect_end:
+                messagebox.showinfo(
+                    "No annotation",
+                    "Please draw a bounding box on the frame before pressing Add.",
+                    parent=self.gui.patient_window
+                )
+                return
+
             # Calculate bounding box parameters from drawn rectangle
             x, y, w, h = self.calculate_rectangle()
             
@@ -225,7 +235,12 @@ class VideoAnnotationHandler():
             # Generate frame mask prediction if mask creation is enabled
             if self.gui.create_frame_mask_var.get():
                 self.image_mask_predictor.predict_mask_for_image_bb(idx, x, y, w, h)
-            
+
+            # Reset the drawing state so a subsequent "Add" without drawing does not
+            # re-add the same (stale) rectangle.
+            self.rect_start = None
+            self.rect_end = None
+
             print(f"[DEBUG] Added Bounding Box with rect_id {self.rect_id}")
 
         # === Polygon Annotation Processing ===
@@ -1208,6 +1223,14 @@ class VideoAnnotationHandler():
             polygon_list[self.polygon_index] = self.polygon_points.copy()
             self.gui.all_annotations.at[self.selected_annotation_original_index, "polygon"] = polygon_list
 
+            # Update the associated mask for the new polygon geometry when frame mask
+            # creation is enabled (no-op without the flag / without SAM2 installed).
+            if self.gui.create_frame_mask_var.get():
+                from image_mask_predictor import ImageMaskPredictor
+                width, height = self.gui.image_size
+                ImageMaskPredictor(gui=self.gui).predict_mask_for_image_polygon(
+                    self.selected_annotation_original_index, self.polygon_points.copy(), width, height)
+
             updated_text = f"{str(class_label).ljust(12)} Polygon: {len(self.polygon_points)} points"
             self.gui.video_annotation_listbox.delete(self.listbox_index)
             self.gui.video_annotation_listbox.insert(self.listbox_index, updated_text)
@@ -1244,6 +1267,12 @@ class VideoAnnotationHandler():
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'w'] = w_list
         self.gui.all_annotations.at[self.selected_annotation_original_index, 'h'] = h_list
 
+        # Update the associated mask for the new box geometry when frame mask
+        # creation is enabled (no-op without the flag / without SAM2 installed).
+        if self.gui.create_frame_mask_var.get():
+            from image_mask_predictor import ImageMaskPredictor
+            ImageMaskPredictor(gui=self.gui).predict_mask_for_image_bb(
+                self.selected_annotation_original_index, new_x, new_y, new_w, new_h)
 
         updated_text = f"{str(class_label).ljust(12)} x:{str(new_x).ljust(5)} y:{str(new_y).ljust(5)} w:{str(new_w).ljust(5)} h:{str(new_h).ljust(5)}"
 
@@ -1302,7 +1331,7 @@ class VideoAnnotationHandler():
         # Get list of valid video files
         videos = [
             i for i in os.listdir(image_folder)
-            if i.lower().endswith(('.mp4'))
+            if i.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))
         ]
 
         # Load annotation data from DataFrame
@@ -1315,17 +1344,11 @@ class VideoAnnotationHandler():
             print(f"[ERROR] Annotation DataFrame is missing necessary columns: {missing_columns}")
             return
 
-        # Normalize annotation data - ensure empty/NaN values are consistently marked as None
-        for col in ['class', 'class_polygon']:
-            annotated_df[col] = annotated_df[col].apply(
-                lambda x: None if (not hasattr(x, '__len__') and pd.isna(x)) or (hasattr(x, '__len__') and len(x) == 0) else x
-            )
-        
-        # Count annotated frames per video by analyzing frame IDs
-        annotated_frame_counts = annotated_df.loc[
-                (pd.notna(annotated_df['class'])) | (pd.notna(annotated_df['class_polygon'])),
-                'img_ID'
-            ].astype(str).str.strip()
+        # Count annotated frames per video by analyzing frame IDs. Vectorized and
+        # read-only (previously this mutated the ENTIRE annotation DataFrame on every
+        # update via a Python-level .apply, which was slow on large databases).
+        annotated_mask = AnnotationLoader.annotated_row_mask(annotated_df)
+        annotated_frame_counts = annotated_df.loc[annotated_mask, 'img_ID'].astype(str).str.strip()
 
         # Get total frame counts for all videos
         self.get_number_of_frames_for_videos()
@@ -1379,7 +1402,7 @@ class VideoAnnotationHandler():
         # Get list of video files in current folder
         videos = [
             i for i in os.listdir(self.image_folder)
-            if i.lower().endswith(('.mp4'))
+            if i.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))
         ]
 
         # Count frames for each video by analyzing file naming patterns

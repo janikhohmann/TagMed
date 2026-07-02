@@ -737,7 +737,7 @@ class GalleryNavigator:
 
         # # Slider + additional controls (Column 3) - stays empty for images
         slider_frame = tk.Frame(bottom_frame, width=600, height=150)
-        slider_frame.grid(row=1, column=4, sticky="nsew", padx=(10, 10), pady=0)
+        slider_frame.grid(row=1, column=3, sticky="nsew", padx=(10, 10), pady=0)
         slider_frame.grid_propagate(False)
 
 

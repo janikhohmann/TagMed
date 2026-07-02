@@ -1,0 +1,24 @@
+# Core runtime dependencies for TagMed.
+#
+# PyTorch is installed separately because the correct wheel depends on your
+# platform. TagMed's core image annotation works WITHOUT PyTorch/SAM; these are
+# only needed for the AI-assisted tracking and mask features.
+#
+#   CPU-only / macOS:  pip install torch torchvision torchaudio
+#   CUDA 12.1:         pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#
+# Optional AI-assisted segmentation/tracking:
+#   pip install segment-anything sam2
+#
+# The easiest path is still: python setup_TagMed.py
+
+opencv-python
+pandas
+numpy
+tqdm
+requests
+hydra-core
+pillow
+scikit-image
+matplotlib
+einops

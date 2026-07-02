@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment created by setup_TagMed.py
+tagmed-env/
+
+# TagMed runtime / generated artifacts
+user_settings.json
+auto_generated_anno_table.csv
+models/
+masks/
+exports/
+start_tagmed.sh
+start_tagmed.bat
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

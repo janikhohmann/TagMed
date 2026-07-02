@@ -159,8 +159,8 @@ class DataLoader:
         try:
             # Scan directory for video files
             videos = [
-                filename for filename in os.listdir(video_folder) 
-                if filename.lower().endswith(('.mov'))  # Extensible: add '.mp4', '.avi', '.mkv'
+                filename for filename in os.listdir(video_folder)
+                if filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))
             ]
             
             print(f"[INFO] Found {len(videos)} videos in {patient_id}/{selected_exam}")
