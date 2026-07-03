@@ -61,7 +61,7 @@ class  VideoTracking:
                 return
             
 
-        if tracking_type in ["SAM2 large", "SAM2 tiny"]:
+        if tracking_type in ["SAM2 large", "SAM2 tiny", "SAM2 US Liver finetuned"]:
             available = self.sam2_tracking.check_if_sam_2_is_available() # option to download different models
 
             if available:

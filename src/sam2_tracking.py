@@ -109,18 +109,25 @@ class SAM2Tracking:
         self.config_path = os.path.join(script_dir, "configs") # Directory where the config files are saved
 
         # Determine model based on user selection
-        # print(self.gui.tracking_type.get())
+        print(self.gui.tracking_type.get())
         if self.gui.tracking_type.get() == "SAM2 large":
             self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
             self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_large.pt"
             self.config_name = "sam2.1_hiera_l.yaml"
+
         if self.gui.tracking_type.get() == "SAM2 tiny":
             self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_tiny.pt")
             self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_tiny.pt"
             self.config_name = "sam2.1_hiera_t.yaml"
 
+        if self.gui.tracking_type.get() == "SAM2 US Liver finetuned":
+            print("[INFO] SAM2 US Liver finetuned model selected.")
+            self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_us_liver_finetuned.pt")
+            #self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_us_liver_finetuned.pt"
+            self.config_name = "sam2.1_hiera_us_liver_finetuned.yaml"
+
         # catch for image segmentation - fallback to large
-        if self.gui.tracking_type.get() not in ["SAM2 large", "SAM2 tiny"]:
+        if self.gui.tracking_type.get() not in ["SAM2 large", "SAM2 tiny", "SAM2 US Liver finetuned"]:
             self.sam2p1_model_path = os.path.join(self.abs_model_dir, "sam2.1_hiera_large.pt")
             self.sam2p1_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_large.pt"
             self.config_name = "sam2.1_hiera_l.yaml"
@@ -130,6 +137,7 @@ class SAM2Tracking:
         # self.sam2p1_hiera_b_plus_url= f"{SAM2p1_BASE_URL}/sam2.1_hiera_base_plus.pt"
 
         if os.path.exists(self.sam2p1_model_path):
+            print(f"SAM2 model found at: {self.sam2p1_model_path}")
             return True
         else:
             load = self.gui.ask_for_sam2_download()
