@@ -165,7 +165,17 @@ class ImgAnnotationHandler:
                 self.gui.wrong_annotation_warning_gui("Bounding Box")
                 self.delete_all_bounding_boxes()
                 return
-            
+
+            # Guard: nothing has been drawn yet -> avoid crashing on empty
+            # rect_start/rect_end (and avoid re-adding a stale rectangle).
+            if not self.rect_start or not self.rect_end:
+                messagebox.showinfo(
+                    "No annotation",
+                    "Please draw a bounding box on the image before pressing Add.",
+                    parent=self.gui.patient_window
+                )
+                return
+
             # Calculate bounding box parameters from drawn rectangle
             x, y, w, h = self.calculate_rectangle()
             
@@ -196,6 +206,11 @@ class ImgAnnotationHandler:
             # Generate mask prediction if mask creation is enabled
             if self.gui.create_mask_var.get():
                 self.image_mask_predictor.predict_mask_for_image_bb(idx, x, y, w, h)
+
+            # Reset the drawing state so a subsequent "Add" without drawing does not
+            # re-add the same (stale) rectangle.
+            self.rect_start = None
+            self.rect_end = None
 
             print(f"[DEBUG] Added Bounding Box with rect_id {self.rect_id}")
 
@@ -1174,9 +1189,14 @@ class ImgAnnotationHandler:
             self.gui.img_annotation_listbox.selection_set(self.listbox_index)
             self.gui.img_annotation_listbox.activate(self.listbox_index)
 
-            # safe new mask for polygon
-            width, height = self.gui.image_size
-            self.image_mask_predictor.predict_mask_for_image_polygon(None, self.polygon_points.copy(), width, height)
+            # Update the associated mask for the new polygon geometry, but only when
+            # mask creation is enabled (otherwise editing needlessly runs SAM2 on
+            # every change). Pass the real DataFrame index so the mask reference is
+            # linked to the correct row.
+            if self.gui.create_mask_var.get():
+                width, height = self.gui.image_size
+                self.image_mask_predictor.predict_mask_for_image_polygon(
+                    self.selected_annotation_original_index, self.polygon_points.copy(), width, height)
 
             # print(f"[INFO] Updated Polygon annotation at index {self.polygon_index}")
             return
@@ -1199,7 +1219,13 @@ class ImgAnnotationHandler:
             print(f"[Update Error] annotation index {self.listbox_index} out of range in DataFrame lists.")
             return
         
-        self.image_mask_predictor.predict_mask_for_image_bb(None, new_x,new_y,new_w,new_h)
+        # Update the associated mask for the new box geometry, but only when mask
+        # creation is enabled (otherwise editing needlessly runs SAM2 on every
+        # change). Pass the real DataFrame index so the mask reference is linked
+        # to the correct row.
+        if self.gui.create_mask_var.get():
+            self.image_mask_predictor.predict_mask_for_image_bb(
+                self.selected_annotation_original_index, new_x, new_y, new_w, new_h)
 
         x_list[self.listbox_index] = new_x
         y_list[self.listbox_index] = new_y
@@ -1270,19 +1296,13 @@ class ImgAnnotationHandler:
             print(f"[ERROR] Annotation DataFrame is missing necessary columns: {missing_columns}")
             return
 
-        # Normalize annotation data - ensure empty/NaN values are consistently marked as None
-        for col in ['class', 'class_polygon']:
-            annotated_df[col] = annotated_df[col].apply(
-                lambda x: None if (not hasattr(x, '__len__') and pd.isna(x)) or (hasattr(x, '__len__') and len(x) == 0) else x
-            )
-
-        # Identify all images that have annotations (either bounding box or polygon)
+        # Identify all images that carry a real annotation (bounding box or polygon).
+        # This is vectorized and read-only. Previously this mutated the ENTIRE
+        # annotation DataFrame on every image selection via a Python-level .apply,
+        # which was a major cause of sluggish navigation on large databases.
+        annotated_mask = AnnotationLoader.annotated_row_mask(annotated_df)
         annotated_image_ids = set(
-            annotated_df.loc[
-                (pd.notna(annotated_df['class'])| 
-                (pd.notna(annotated_df['class_polygon']))),
-                'img_ID'
-            ].astype(str).str.strip()
+            annotated_df.loc[annotated_mask, 'img_ID'].astype(str).str.strip()
         )
 
         # Populate listbox with images and apply color coding based on annotation status

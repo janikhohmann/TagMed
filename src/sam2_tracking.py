@@ -31,10 +31,19 @@ import numpy as np
 import cv2
 import requests
 import ast
-import torch
 import pandas as pd
-from hydra import initialize_config_dir
-from hydra.core.global_hydra import GlobalHydra
+
+# Heavy ML dependencies (torch, hydra) are optional so the core annotation tool
+# can start even when they are not installed. They are only required for
+# AI-assisted tracking and are guarded at the entry point (check_if_sam_2_is_available).
+try:
+    import torch
+    from hydra import initialize_config_dir
+    from hydra.core.global_hydra import GlobalHydra
+except ImportError:
+    torch = None
+    initialize_config_dir = None
+    GlobalHydra = None
 
 from config_handler import ConfigHandler
 from video_annotation_handler import VideoAnnotationHandler
@@ -102,6 +111,16 @@ class SAM2Tracking:
         - SAM2 large: High-accuracy model for detailed segmentation
         - SAM2 tiny: Lightweight model for faster processing
         """
+        # Guard: AI-assisted tracking needs PyTorch/SAM2 which are optional dependencies.
+        if torch is None:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Missing dependency",
+                "PyTorch is not installed, so SAM2 tracking is unavailable.\n\n"
+                "Please install the ML packages (torch, sam2) to use this feature."
+            )
+            return False
+
         SAM2p1_BASE_URL="https://dl.fbaipublicfiles.com/segment_anything_2/092824"
 
         # Path to custom config

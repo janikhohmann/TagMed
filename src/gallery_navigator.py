@@ -510,7 +510,14 @@ class GalleryNavigator:
         self.selected_image_index = selected_image
         image_path = os.path.join(self.selected_image_folder, self.patient_id, self.selected_exam, selected_image)
 
-        pil_image = Image.open(image_path)
+        try:
+            pil_image = Image.open(image_path)
+        except (FileNotFoundError, OSError) as e:
+            messagebox.showerror(
+                "Image error",
+                f"Could not open image:\n{image_path}\n\n{e}"
+            )
+            return
 
         width, height = self.image_size
         pil_image = pil_image.resize((width, height), Image.Resampling.LANCZOS)
@@ -730,7 +737,7 @@ class GalleryNavigator:
 
         # # Slider + additional controls (Column 3) - stays empty for images
         slider_frame = tk.Frame(bottom_frame, width=600, height=150)
-        slider_frame.grid(row=1, column=4, sticky="nsew", padx=(10, 10), pady=0)
+        slider_frame.grid(row=1, column=3, sticky="nsew", padx=(10, 10), pady=0)
         slider_frame.grid_propagate(False)
 
 

@@ -20,13 +20,24 @@ Institution: University Hospital Düsseldorf
 import os
 import ast
 import pandas as pd
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
-import torch
 import cv2
 import numpy as np
-from hydra.core.global_hydra import GlobalHydra
-from hydra import initialize_config_dir
+
+# Heavy ML dependencies (torch, sam2, hydra) are optional so the core annotation
+# tool can start even when they are not installed. They are only required for
+# AI-assisted mask prediction and are guarded at the entry points below.
+try:
+    import torch
+    from sam2.build_sam import build_sam2
+    from sam2.sam2_image_predictor import SAM2ImagePredictor
+    from hydra.core.global_hydra import GlobalHydra
+    from hydra import initialize_config_dir
+except ImportError:
+    torch = None
+    build_sam2 = None
+    SAM2ImagePredictor = None
+    GlobalHydra = None
+    initialize_config_dir = None
 
 
 from config_handler import ConfigHandler
@@ -84,6 +95,16 @@ class ImageMaskPredictor:
         Returns:
             str: Path to the saved mask file or None if no mask was generated
         """
+        # Guard: mask prediction needs PyTorch/SAM2 which are optional dependencies.
+        if torch is None or build_sam2 is None:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Missing dependency",
+                "PyTorch/SAM2 is not installed, so AI-assisted mask creation is unavailable.\n\n"
+                "Please install the ML packages (torch, sam2) to use this feature."
+            )
+            return None
+
         # Check if SAM2 is available
         self.sam2_tracking.check_if_sam_2_is_available()
 
@@ -221,6 +242,15 @@ class ImageMaskPredictor:
             width (int): Width of the image
             height (int): Height of the image
         """
+        # Guard: mask prediction needs PyTorch/SAM2 which are optional dependencies.
+        if torch is None or build_sam2 is None:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Missing dependency",
+                "PyTorch/SAM2 is not installed, so AI-assisted mask creation is unavailable.\n\n"
+                "Please install the ML packages (torch, sam2) to use this feature."
+            )
+            return None
 
         # check if an image is selected in the GUI or frame is selected
         if self.gui.selected_image_index is not None:

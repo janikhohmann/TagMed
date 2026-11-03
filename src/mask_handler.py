@@ -34,9 +34,10 @@ class MaskHandler:
         Load a mask from a file with the format:
         <img_id>_<class>_<index>.npz.
         """
-        mask_path = f"{self.mask_dir}/{image_id}_{mask_class}_{mask_idx}.np"
+        mask_path = f"{self.mask_dir}/{image_id}_{mask_class}_{mask_idx}.npz"
         try:
-            mask = np.load(mask_path)
+            # Masks are saved via np.savez_compressed(..., mask=mask), so read the "mask" key.
+            mask = np.load(mask_path)["mask"]
             return mask
         except FileNotFoundError:
             print(f"Mask file not found: {mask_path}")

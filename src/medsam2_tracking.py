@@ -31,10 +31,19 @@ import cv2
 import requests
 import ast
 import tqdm
-import torch
 import pandas as pd
-from hydra import initialize_config_dir
-from hydra.core.global_hydra import GlobalHydra
+
+# Heavy ML dependencies (torch, hydra) are optional so the core annotation tool
+# can start even when they are not installed. They are only required for
+# AI-assisted tracking and are guarded at the entry point (check_if_medsam2_is_available).
+try:
+    import torch
+    from hydra import initialize_config_dir
+    from hydra.core.global_hydra import GlobalHydra
+except ImportError:
+    torch = None
+    initialize_config_dir = None
+    GlobalHydra = None
 
 from config_handler import ConfigHandler
 from video_annotation_handler import VideoAnnotationHandler
@@ -106,6 +115,16 @@ class MedSAM2Tracking:
         - MedSAM2 US Heart: Specialized for ultrasound heart imaging
         - MedSAM2 MRI Liver Lesion: Specialized for MRI liver lesion detection
         """
+        # Guard: AI-assisted tracking needs PyTorch/SAM2 which are optional dependencies.
+        if torch is None:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Missing dependency",
+                "PyTorch is not installed, so MedSAM2 tracking is unavailable.\n\n"
+                "Please install the ML packages (torch, sam2) to use this feature."
+            )
+            return False
+
         if self.gui.tracking_type.get() == "MedSAM2":
             self.medsam2_url = f"{self.MEDSAM2_BASE_URL}/MedSAM2_latest.pt"
             self.medsam2_model_path = os.path.join(self.abs_model_dir, "MedSAM2_latest.pt")

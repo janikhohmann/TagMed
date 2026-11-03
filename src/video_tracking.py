@@ -4,15 +4,12 @@ import tkinter as tk
 import pandas as pd
 import requests
 from tqdm import tqdm
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
-import torch
 import cv2
 import numpy as np
-import hydra
-from hydra.core.global_hydra import GlobalHydra
-import matplotlib.pyplot as plt
-
+# Note: torch / sam2 / hydra are not used directly in this module. The heavy ML
+# work lives in sam2_tracking / medsam2_tracking / sam3_tracking, which guard
+# those optional imports themselves. matplotlib is imported lazily in
+# show_debug_visuals so the core tool starts without it.
 
 
 from config_handler import ConfigHandler
@@ -234,6 +231,8 @@ class  VideoTracking:
         3. Maske (Rohdaten)
         4. Binarisierte Maske
         """
+        import matplotlib.pyplot as plt
+
         fig, axs = plt.subplots(1, 4, figsize=(20, 5))
 
         # Originalbild
@@ -291,8 +290,14 @@ class  VideoTracking:
                 if match_next.any():
                     next_df_index = self.gui.all_annotations[match_next].index[0]
 
-                    for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype', 'polygon', 'class_polygon', 'polygon_annoytype']:
-                        self.gui.all_annotations.at[next_df_index, col] = "NN"
+                    # Clear all annotation columns to None (consistent with single-item
+                    # deletion and with how the reader/counter interpret empty cells).
+                    # Note: previously "NN" was written and 'polygon_annotype' was
+                    # misspelled ('polygon_annoytype'), so it was never actually cleared.
+                    for col in ['x', 'y', 'w', 'h', 'class', 'bb_annotype',
+                                'polygon', 'class_polygon', 'polygon_annotype', 'masks']:
+                        if col in self.gui.all_annotations.columns:
+                            self.gui.all_annotations.at[next_df_index, col] = None
             
             self.mask_handler.clear_all_masks()
             self.video_annotation_handler.clear_all_annotations()
